@@ -3,27 +3,30 @@
 // ==========================================
 
 kaboom({
-    background: [34, 34, 34], // Dark grey background
+    background: [20, 20, 20], // Darker grey for a better contrast with the neon
 });
 
-// Load custom textures
 loadSprite("myPlayer", "sprites/player.png");
 loadSprite("myBug", "sprites/bug.png");
 
-// Game Configuration Constants
+// Core Constants
 const PLAYER_SPEED = 200;
-const ENEMY_SPEED = 100;
 const BULLET_SPEED = 400;
 
-// Global variables to track state across scenes
+// Global State Variables
 let player;
 let score = 0;
+
+// Phase System Variables
+let currentPhase = 1;
+let currentEnemySpeed = 100;
+let currentSpawnRate = 1.0; 
+let spawnTimer = 0;
 
 // ==========================================
 // 2. GLOBAL HELPER FUNCTIONS
 // ==========================================
 
-// Juice: Spawns a burst of 6 red particles when a bug dies
 function spawnParticles(spawnPos) {
     for (let i = 0; i < 6; i++) {
         add([
@@ -38,7 +41,6 @@ function spawnParticles(spawnPos) {
     }
 }
 
-// AI: Scans all active enemies and returns the one closest to the player
 function getNearestEnemy() {
     const enemies = get("enemy"); 
     if (enemies.length === 0) return null;
@@ -56,15 +58,20 @@ function getNearestEnemy() {
     return nearest;
 }
 
-// Spawner: Creates a bug at a random outer edge of the map
+// UPDATED: Spawns enemies just outside the CAMERA view, not the screen bounds
 function spawnEnemy() {
+    const cam = camPos();
     let spawnPoint = vec2(0, 0);
     const edge = choose(["top", "bottom", "left", "right"]);
 
-    if (edge === "top") spawnPoint = vec2(rand(0, width()), -32);
-    if (edge === "bottom") spawnPoint = vec2(rand(0, width()), height() + 32);
-    if (edge === "left") spawnPoint = vec2(-32, rand(0, height()));
-    if (edge === "right") spawnPoint = vec2(width() + 32, rand(0, height()));
+    // Calculate the outer edges of the current camera view
+    const w = width() / 2 + 50;
+    const h = height() / 2 + 50;
+
+    if (edge === "top") spawnPoint = vec2(rand(cam.x - w, cam.x + w), cam.y - h);
+    if (edge === "bottom") spawnPoint = vec2(rand(cam.x - w, cam.x + w), cam.y + h);
+    if (edge === "left") spawnPoint = vec2(cam.x - w, rand(cam.y - h, cam.y + h));
+    if (edge === "right") spawnPoint = vec2(cam.x + w, rand(cam.y - h, cam.y + h));
 
     add([
         sprite("myBug"),
@@ -75,63 +82,97 @@ function spawnEnemy() {
     ]);
 }
 
+// NEW: Spawn a coin when an enemy dies
+function spawnCoin(dropPos) {
+    add([
+        circle(6), // A little gold coin
+        pos(dropPos),
+        color(255, 215, 0), // Gold color
+        anchor("center"),
+        area(),
+        "coin",
+        // Crucial: The coin lasts 6 seconds, and fades out over the last 1.5 seconds
+        lifespan(6, { fade: 1.5 }) 
+    ]);
+}
+
 // ==========================================
 // 3. GAME SCENES
 // ==========================================
 
 // --- SCENE: START MENU ---
 scene("start", () => {
-    add([
-        text("BUCC SURVIVOR", { size: 48 }),
-        pos(center().x, center().y - 40),
-        anchor("center"),
-        color(0, 150, 255) // Classic BUCC Blue
-    ]);
-
-    add([
-        text("Tap or Click to Start", { size: 24 }),
-        pos(center().x, center().y + 40),
-        anchor("center"),
-        color(255, 255, 255)
-    ]);
-
-    // Click anywhere to launch the game
+    add([text("BUCC SURVIVOR", { size: 48 }), pos(center().x, center().y - 40), anchor("center"), color(0, 150, 255)]);
+    add([text("Tap or Click to Start", { size: 24 }), pos(center().x, center().y + 40), anchor("center")]);
     onMousePress(() => go("game"));
 });
-
 
 // --- SCENE: ACTIVE GAMEPLAY ---
 scene("game", () => {
     // Reset core metrics on launch
     score = 0;
+    currentPhase = 1;
+    currentEnemySpeed = 80; // Start slightly slower
+    currentSpawnRate = 1.0; 
+    spawnTimer = 0;
 
-    // Create the Player Entity
+    // Create Player
     player = add([
         sprite("myPlayer"),  
         pos(center()),       
         anchor("center"),    
         area(),              
-        "player"             
+        "player",
+        z(50) // Ensures player is drawn on top of coins
     ]);
 
-    // Set up UI Score Element
+    // UI: Coins Collected (Using fixed() to glue it to the screen while camera moves)
     const scoreLabel = add([
-        text("Bugs Smashed: 0", { size: 24 }),
+        text("Data Collected: 0", { size: 24 }),
         pos(24, 24),
         fixed(), 
         z(100)   
     ]);
 
-    // --- INPUT SYSTEMS ---
+    // UI: Current Phase
+    const phaseLabel = add([
+        text("Phase: 1", { size: 24 }),
+        pos(24, 60),
+        color(0, 255, 150),
+        fixed(),
+        z(100)
+    ]);
 
-    // Touch/Mouse Tracking
-    onUpdate(() => {
-        if (isMouseDown()) {
-            player.moveTo(mousePos(), PLAYER_SPEED);
+    // --- INFINITE BACKGROUND GRID ---
+    // This draws a cyber-grid behind the player to show camera movement
+    onDraw(() => {
+        const cam = camPos();
+        const gw = 100; // grid size
+        const sx = Math.floor((cam.x - width()/2) / gw) * gw;
+        const sy = Math.floor((cam.y - height()/2) / gw) * gw;
+        
+        for (let i = -1; i <= width()/gw + 1; i++) {
+            drawLine({ p1: vec2(sx + i*gw, cam.y - height()/2), p2: vec2(sx + i*gw, cam.y + height()/2), width: 2, color: rgb(40, 40, 40) });
+        }
+        for (let j = -1; j <= height()/gw + 1; j++) {
+            drawLine({ p1: vec2(cam.x - width()/2, sy + j*gw), p2: vec2(cam.x + width()/2, sy + j*gw), width: 2, color: rgb(40, 40, 40) });
         }
     });
 
-    // Keyboard Tracking (WASD + Arrows)
+    // --- INPUT & CAMERA ---
+
+    onUpdate(() => {
+        // Camera smoothly follows the player
+        camPos(player.pos);
+
+        // Touch/Mouse Tracking (Updated to convert screen pixels to world coordinates!)
+        if (isMouseDown()) {
+            const worldMousePos = toWorld(mousePos());
+            player.moveTo(worldMousePos, PLAYER_SPEED);
+        }
+    });
+
+    // Keyboard Tracking
     onKeyDown("left", () => player.move(-PLAYER_SPEED, 0));
     onKeyDown("a", () => player.move(-PLAYER_SPEED, 0));
     onKeyDown("right", () => player.move(PLAYER_SPEED, 0));
@@ -141,93 +182,106 @@ scene("game", () => {
     onKeyDown("down", () => player.move(0, PLAYER_SPEED));
     onKeyDown("s", () => player.move(0, PLAYER_SPEED));
 
-    // Screen Boundary Guard
-    player.onUpdate(() => {
-        if (player.pos.x < 0) player.pos.x = 0;
-        if (player.pos.x > width()) player.pos.x = width();
-        if (player.pos.y < 0) player.pos.y = 0;
-        if (player.pos.y > height()) player.pos.y = height();
-    });
+    // Notice: We removed the "Screen Boundary Guard" code! The map is now infinite.
 
     // --- GAME LOOPS ---
 
-    // Tick: Spawn a bug every 1 second
-    loop(1, () => {
-        spawnEnemy();
+    // Enemy Spawner: Uses the dynamic spawn rate
+    onUpdate(() => {
+        spawnTimer -= dt(); // dt() is the time since the last frame
+        if (spawnTimer <= 0) {
+            spawnEnemy();
+            spawnTimer = currentSpawnRate;
+        }
     });
 
-    // Tick: Auto-target and shoot closest bug every 0.5 seconds
+    // Phase Manager: Upgrades difficulty every 15 seconds
+    loop(15, () => {
+        if (currentPhase < 10) {
+            currentPhase++;
+            currentEnemySpeed += 15;   // Bugs get faster
+            currentSpawnRate *= 0.85;  // Bugs spawn more frequently
+            
+            phaseLabel.text = "Phase: " + currentPhase;
+
+            // Flash a warning text on the screen!
+            add([
+                text("PHASE " + currentPhase, { size: 50 }),
+                pos(center()),
+                fixed(),
+                anchor("center"),
+                color(255, 50, 50),
+                lifespan(1.5, { fade: 0.5 }), // Fades out automatically
+                z(100)
+            ]);
+        }
+    });
+
+    // Auto-Shooter Loop
     loop(0.5, () => {
         const nearestEnemy = getNearestEnemy();
         if (!nearestEnemy) return;
 
         const direction = nearestEnemy.pos.sub(player.pos).unit();
 
-        // Spawn Projectile (Blue Ball Variant)
         add([
-            circle(8),           // Smooth ball radius
+            circle(8),
             pos(player.pos),
-            color(0, 150, 255),  // Vivid neon blue
+            color(0, 150, 255),  
             anchor("center"),
             area(),
             move(direction, BULLET_SPEED),
-            offscreen({ destroy: true }), 
+            lifespan(2), // Destroys bullet after 2 seconds so it doesn't fly forever in infinite space
             "bullet"
         ]);
     });
 
-    // AI Track: Force bugs to actively pursue the player every frame
+    // Enemy AI: Pursue player at current phase speed
     onUpdate("enemy", (enemy) => {
         const direction = player.pos.sub(enemy.pos).unit();
-        enemy.move(direction.scale(ENEMY_SPEED));
+        enemy.move(direction.scale(currentEnemySpeed));
     });
 
     // --- COLLISION LOGIC ---
 
-    // Collision: Blue Ball destroys a Bug
+    // Bullet hits Bug
     onCollide("bullet", "enemy", (b, e) => {
         destroy(b); 
         destroy(e); 
         
-        spawnParticles(e.pos); // Trigger juice explosion
-        shake(2);             // Quick screen shake Impact
-        
-        score += 1;
-        scoreLabel.text = "Bugs Smashed: " + score; 
+        spawnParticles(e.pos); 
+        spawnCoin(e.pos); // Drop the coin!
     });
 
-    // Collision: Bug touches the Player
+    // Player collects Coin
+    onCollide("player", "coin", (p, c) => {
+        destroy(c);
+        score += 1;
+        scoreLabel.text = "Data Collected: " + score;
+    });
+
+    // Bug touches Player
     onCollide("player", "enemy", (p, e) => {
         destroy(p); 
-        go("lose", score); // Instantly transition to Game Over and carry score data
+        go("lose", score, currentPhase); // Pass score and phase to Game Over
     });
 });
 
-
 // --- SCENE: GAME OVER ---
-scene("lose", (finalScore) => {
-    add([
-        text("SYSTEM CRASHED!", { size: 48 }),
-        pos(center().x, center().y - 60),
-        anchor("center"),
-        color(255, 50, 50) // Warning Red
-    ]);
+scene("lose", (finalScore, finalPhase) => {
+    add([text("SYSTEM CRASHED!", { size: 48 }), pos(center().x, center().y - 80), anchor("center"), color(255, 50, 50)]);
+    add([text("Data Collected: " + finalScore, { size: 32 }), pos(center().x, center().y - 10), anchor("center")]);
+    
+    // Add a cheeky message based on the phase they reached
+    let rankMsg = "";
+    if (finalPhase < 4) rankMsg = "Rank: Freshman Coder";
+    else if (finalPhase < 8) rankMsg = "Rank: Senior Dev";
+    else if (finalPhase < 10) rankMsg = "Rank: Lead Architect";
+    else rankMsg = "Rank: BUCC LEGEND";
 
-    add([
-        text("Bugs Smashed: " + finalScore, { size: 32 }),
-        pos(center().x, center().y + 10),
-        anchor("center"),
-        color(255, 255, 255)
-    ]);
+    add([text(rankMsg, { size: 28 }), pos(center().x, center().y + 40), anchor("center"), color(0, 255, 150)]);
+    add([text("Tap to Recompile", { size: 20 }), pos(center().x, center().y + 100), anchor("center"), color(150, 150, 150)]);
 
-    add([
-        text("Tap Anywhere to Recompile", { size: 20 }),
-        pos(center().x, center().y + 70),
-        anchor("center"),
-        color(150, 150, 150)
-    ]);
-
-    // Instantly reset the environment on touch click
     onMousePress(() => go("game"));
 });
 
