@@ -166,6 +166,42 @@ function dropEnemyLoot(enemyPos, enemyType = "normal") {
     if (chance(0.25)) rollStandardLoot(enemyPos.add(rand(-20, 20), rand(-20, 20)));
 }
 
+scene("interaction_gate", () => {
+    // Clean Stadium Background Layout
+    add([
+        rect(width(), height()),
+        color(10, 14, 12)
+    ]);
+
+    // Pulsing Core text to grab user attention
+    const promptText = add([
+        text("TAP TO ENTER STADIUM", { size: 24, font: "bebas" }),
+        pos(center()),
+        anchor("center"),
+        color(0, 215, 140) // Tournament Green
+    ]);
+
+    // Make the text pulse smoothly so it looks like an arcade screen
+    onUpdate(() => {
+        promptText.opacity = wave(0.3, 1, time() * 4);
+    });
+
+    // 🌟 THE MAGIC FIX: The moment they click anywhere, audio is unlocked!
+    onMousePress(() => {
+        // Start the menu theme music smoothly now that the browser allows it
+        bgm = play("menu_theme", { loop: true, volume: 0.35 });
+        
+        // Move along to your beautiful loading screen sequence
+        go("loading");
+    });
+    
+    // Also support keyboard users hitting any key to enter
+    onKeyPress(() => {
+        bgm = play("menu_theme", { loop: true, volume: 0.35 });
+        go("loading");
+    });
+});
+
 // --- LOADING SCENE ---
 scene("loading", () => {
     const LOADING_TIME = 2.5;
@@ -1073,4 +1109,4 @@ scene("win", (finalScore) => {
     onKeyPress(() => go("menu"));
 });
 
-go("loading");
+go("interaction_gate");
