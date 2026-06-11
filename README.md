@@ -3,7 +3,7 @@
 An intense, action-packed retro arcade football survival game where you dodge rivals, collect golden balls, and fight for a spot on the global stage. Built using the **Kaboom.js** engine and powered by a live cloud backend.
 
 ## 🚀 Live Demo
-👉 **[INSERT YOUR GITHUB PAGES LINK HERE]**
+👉 (https://mdfahimhassan.github.io/FIFA-Survivor/
 
 ---
 
@@ -33,6 +33,7 @@ To run this project locally on your machine:
 1. Clone this repository:
    ```bash
    git clone [https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git)
+   
 Open index.html inside any modern web browser (or run it using VS Code's Live Server extension).
 
 ⚠️ Note: To connect to the database, ensure your own localized secret web app configuration object keys are correctly initialized via firebase.initializeApp(firebaseConfig) near the top of your core script file.
