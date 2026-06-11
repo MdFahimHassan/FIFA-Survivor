@@ -3,7 +3,7 @@
 An intense, action-packed retro arcade football survival game where you dodge rivals, collect golden balls, and fight for a spot on the global stage. Built using the **Kaboom.js** engine and powered by a live cloud backend.
 
 ## 🚀 Live Demo
-👉 (https://mdfahimhassan.github.io/FIFA-Survivor/
+👉 https://mdfahimhassan.github.io/FIFA-Survivor/
 
 ---
 
