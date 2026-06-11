@@ -39,22 +39,12 @@ Open index.html inside any modern web browser (or run it using VS Code's Live Se
 ⚠️ Note: To connect to the database, ensure your own localized secret web app configuration object keys are correctly initialized via firebase.initializeApp(firebaseConfig) near the top of your core script file.
 
 🏆 Current Feature Set
-○ [x] Ultra-smooth looping 60FPS graphical star fields and canvas layering.
+○ Ultra-smooth looping 60FPS graphical star fields and canvas layering.
 
-○ [x] Immersive stadium audio ambiance and responsive UI hover sound effects.
+○ Immersive stadium audio ambiance and responsive UI hover sound effects.
 
-○ [x] Interactive team selection screen featuring global football federations.
+○ Interactive team selection screen featuring global football federations.
 
-○ [x] Custom prompt-handling logic linked to live database query snapshot counts.
+○ Custom prompt-handling logic linked to live database query snapshot counts.
 
-○ [x] Automated schema-less cloud upload on game-over scenes.
-
----
-
-### 💻 How to Update It on GitHub
-1. Go to your repository on GitHub.
-2. Click **Add file** -> **Create new file** (or click the edit icon on your current `README.md`).
-3. Make sure the file name is exactly `README.md`.
-4. Paste the text block above, replace the `[INSERT YOUR GITHUB PAGES LINK HERE]` with your actual game link, and hit **Commit changes** at the bottom.
-
-Are you planning to share this link with friends to have them test the leaderboard, or do you want to add any other gameplay features first?
+○ Automated schema-less cloud upload on game-over scenes.
