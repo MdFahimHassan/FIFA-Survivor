@@ -762,12 +762,91 @@ scene("start", () => {
     confirmBtn.onClick(() => {
         play("ui_click", { volume: 0.5 });
         if (bgm) bgm.paused = true; // Cut the menu music!
-        go("game");
+        go("instructions");
     });
 
     onKeyPress("enter", () => {
         play("ui_click", { volume: 0.5 });
         if (bgm) bgm.paused = true;
+        go("instructions");
+    });
+});
+
+scene("instructions", () => {
+    // 1. Add Immersive Stadium Background
+    const bg = add([
+        sprite("stadium"),
+        pos(center()),
+        anchor("center"),
+        scale(1),
+        z(0)
+    ]);
+
+    bg.onUpdate(() => {
+        if (bg.width && bg.height) {
+            const scaleFactor = Math.max(width() / bg.width, height() / bg.height);
+            bg.scale = vec2(scaleFactor, scaleFactor);
+        }
+    });
+
+    // 2. Translucent Dark Glass Backdrop to make text highly readable
+    add([
+        rect(width() * 0.7, height() * 0.6, { radius: 8 }),
+        pos(center()),
+        anchor("center"),
+        color(10, 16, 14),
+        opacity(0.85),
+        outline(2, rgb(0, 255, 150)),
+        z(1)
+    ]);
+
+    // Apply corporate branding over background assets
+    addBranding(); 
+
+    // 3. Header Text
+    add([
+        text("HOW TO PLAY", { size: 44, font: "bebas" }),
+        pos(width() / 2, height() * 0.26),
+        anchor("center"),
+        color(255, 215, 0), // Golden title
+        z(2)
+    ]);
+
+    // 4. Mission Objective Statement
+    add([
+        text("MISSION:\nSurvive the defensive pressure! Collect coins\nto purchase attributes inside the item shop and \nCollect Golden Balls to proceed to the next Match.\nReach the Final and win to emerge on the Leaderboards!!", { size: 20, font: "teko", align: "center", lineSpacing: 4 }),
+        pos(width() / 2, height() * 0.42),
+        anchor("center"),
+        color(240, 240, 240),
+        z(2)
+    ]);
+
+    // 5. Explicit Core Control Schemes
+    add([
+        text("CONTROLS:\n[ W A S D ] or [ ARROWS ] - Move Player\n[ AUTOMATIC ] - Target Acquisition & Shooting\n[ SPACEBAR ] - Deploy Kinetic Bicycle AoE Cleave", { size: 19, font: "teko", align: "center", lineSpacing: 4 }),
+        pos(width() / 2, height() * 0.62),
+        anchor("center"),
+        color(140, 255, 170), // Fluid terminal green
+        z(2)
+    ]);
+
+    // 6. Blinking Action Button
+    const startPrompt = add([
+        text("Press [ ENTER ] to Kick Off!", { size: 26, font: "bebas" }),
+        pos(width() / 2, height() * 0.74),
+        anchor("center"),
+        color(255, 255, 255),
+        z(2)
+    ]);
+
+    loop(0.5, () => {
+        startPrompt.hidden = !startPrompt.hidden;
+    });
+
+    // 7. Transition to Core Game Engine & Terminate Menu BGM
+    onKeyPress("enter", () => {
+        play("ui_click", { volume: 0.5 });
+        if (bgm) bgm.paused = true; // Cut the menu audio track right at kickoff!
         go("game");
     });
 });
