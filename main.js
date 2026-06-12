@@ -1218,9 +1218,13 @@ scene("game", () => {
         isUpgrading = !isUpgrading;
         if (isUpgrading) {
             const backdrop = add([rect(580, 530, { radius: 8 }), pos(center()), anchor("center"), color(14, 18, 16), outline(3, rgb(0, 215, 140)), fixed(), z(200)]);
-            add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x + 2, center().y - 223), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
+            
+            // FIX: Stored the title shadow in a variable so we can clean it up
+            const titleShadow = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x + 2, center().y - 223), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
             const title = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x, center().y - 225), anchor("center"), color(255, 215, 0), outline(2, rgb(12, 8, 0)), fixed(), z(201)]);
-            shopUIComponents.push(backdrop, title);
+            
+            // Track the background, shadow, and foreground main title
+            shopUIComponents.push(backdrop, titleShadow, title);
 
             const createUpgradeRow = (labelName, statusDisplay, cost, yOffset, isOwned, onUpgradeClick) => {
                 const textInfo = add([text(`${labelName} (${statusDisplay})`, { size: 16, font: "bebas" }), pos(center().x - 250, center().y + yOffset), anchor("left"), color(235, 235, 235), outline(1, rgb(10, 10, 10)), fixed(), z(201)]);
@@ -1238,7 +1242,8 @@ scene("game", () => {
             };
 
             const refreshShop = () => {
-                shopUIComponents.forEach(c => { if (c !== backdrop && c !== title) c.destroy(); });
+                // FIX: Make sure the shop refresh doesn't purge the title shadow asset prematurely
+                shopUIComponents.forEach(c => { if (c !== backdrop && c !== title && c !== titleShadow) c.destroy(); });
                 let rateCost = (upgFireRateLevel + 1) * 25;
                 let speedCost = (upgSpeedLevel + 1) * 20;
                 let magnetCost = (upgMagnetLevel + 1) * 15;
@@ -1256,9 +1261,12 @@ scene("game", () => {
             };
 
             refreshShop();
-            add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x + 1.5, center().y + 226.5), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
+            
+            // FIX: Stored exit message shadow in a variable and added it to tracker list
+            const exitShadow = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x + 1.5, center().y + 226.5), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
             const exitTip = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x, center().y + 225), anchor("center"), color(190, 215, 235), outline(1, rgb(15, 18, 20)), fixed(), z(201)]);
-            shopUIComponents.push(exitTip);
+            
+            shopUIComponents.push(exitShadow, exitTip);
         } else {
             shopUIComponents.forEach(comp => comp.destroy()); shopUIComponents = [];
         }
