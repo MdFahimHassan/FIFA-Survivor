@@ -22,7 +22,7 @@ loadSprite("ball", "sprites/ball.png");
 loadSprite("bicycle_kick", "sprites/bycycle_kick.png");
 loadSprite("loading_ball", "sprites/loading_ball.png");
 loadSprite("slide_icon", "sprites/slide_icon.png");
-loadSprite("fifa26", "sprites/fifa_26.png"); 
+loadSprite("fifa26", "sprites/fifa_26.png");
 loadSprite("my_club", "sprites/club_logo.png");
 
 // Ultra-smooth 60FPS 3D looping Star sheet
@@ -81,6 +81,38 @@ async function generateUniqueTag(enteredName) {
     }
 }
 
+// 💾 AUTOMATED LIVE DATABASE SEEDER
+async function seedInitialBenchmarks() {
+    try {
+        // Check if your specific developer benchmark is already in the database
+        const benchmarkCheck = await scoresCollection.where("name", "==", "Fahim (Dev)").get();
+
+        // If it's NOT in the database, upload the benchmarks alongside the real scores!
+        if (benchmarkCheck.empty) {
+            console.log("Benchmarks missing. Injecting R&D targets alongside existing scores...");
+            const benchmarks = [
+                { name: "Fahim (Dev)", tag: "#14", name_lowercase: "fahim (dev)", score: 1233, timestamp: firebase.firestore.FieldValue.serverTimestamp() },
+                { name: "Raphy", tag: "#05", name_lowercase: "raphy", score: 724, timestamp: firebase.firestore.FieldValue.serverTimestamp() },
+                { name: "Abir", tag: "#03", name_lowercase: "abir", score: 425, timestamp: firebase.firestore.FieldValue.serverTimestamp() },
+                { name: "Ren", tag: "#07", name_lowercase: "ren", score: 250, timestamp: firebase.firestore.FieldValue.serverTimestamp() },
+                { name: "Sloth", tag: "#12", name_lowercase: "sloth", score: 78, timestamp: firebase.firestore.FieldValue.serverTimestamp() }
+            ];
+
+            for (const record of benchmarks) {
+                await scoresCollection.add(record);
+            }
+            console.log("Benchmarks successfully injected into the cloud!");
+        } else {
+            console.log("Benchmarks already exist in cloud. Skipping seed.");
+        }
+    } catch (e) {
+        console.error("Cloud seeding error:", e);
+    }
+}
+
+// Fire the seeder engine safely in the background
+seedInitialBenchmarks();
+
 // 💾 CLOUD FUNCTION: Upload match score data to Google Firestore
 async function saveScoreToLeaderboard(finalScore) {
     try {
@@ -106,11 +138,13 @@ async function getGlobalTopFive() {
         });
         return list;
     } catch (e) {
-        // Safe placeholder defaults in case player goes offline completely
+        // Secure fallback benchmarks if network lags or player is offline
         return [
-            { name: "Pelé", tag: "#01", score: 250 },
-            { name: "Ronaldo", tag: "#07", score: 180 },
-            { name: "Messi", tag: "#10", score: 150 }
+            { name: "Fahim (Dev)", tag: "#14", score: 1233 },
+            { name: "Raphy", tag: "#05", score: 724 },
+            { name: "Abir", tag: "#03", score: 425 },
+            { name: "Ren", tag: "#07", score: 250 },
+            { name: "Sloth", tag: "#12", score: 78 }
         ];
     }
 }
@@ -801,7 +835,7 @@ scene("instructions", () => {
     ]);
 
     // Apply corporate branding over background assets
-    addBranding(); 
+    addBranding();
 
     // 3. Header Text
     add([
@@ -1218,11 +1252,11 @@ scene("game", () => {
         isUpgrading = !isUpgrading;
         if (isUpgrading) {
             const backdrop = add([rect(580, 530, { radius: 8 }), pos(center()), anchor("center"), color(14, 18, 16), outline(3, rgb(0, 215, 140)), fixed(), z(200)]);
-            
+
             // FIX: Stored the title shadow in a variable so we can clean it up
             const titleShadow = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x + 2, center().y - 223), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
             const title = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x, center().y - 225), anchor("center"), color(255, 215, 0), outline(2, rgb(12, 8, 0)), fixed(), z(201)]);
-            
+
             // Track the background, shadow, and foreground main title
             shopUIComponents.push(backdrop, titleShadow, title);
 
@@ -1261,11 +1295,11 @@ scene("game", () => {
             };
 
             refreshShop();
-            
+
             // FIX: Stored exit message shadow in a variable and added it to tracker list
             const exitShadow = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x + 1.5, center().y + 226.5), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
             const exitTip = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x, center().y + 225), anchor("center"), color(190, 215, 235), outline(1, rgb(15, 18, 20)), fixed(), z(201)]);
-            
+
             shopUIComponents.push(exitShadow, exitTip);
         } else {
             shopUIComponents.forEach(comp => comp.destroy()); shopUIComponents = [];
@@ -1280,7 +1314,7 @@ scene("game", () => {
         if (e.hp > 1) {
             e.hp--;
             spawnParticles(e.pos, rgb(255, 155, 50));
-            
+
             // Does the bullet have piercing left?
             if (b.pierceHp && b.pierceHp > 1) {
                 b.pierceHp--; // Bullet loses durability but keeps flying
@@ -1297,7 +1331,7 @@ scene("game", () => {
 
         // 3. ONLY destroy the bullet if it has no piercing durability left
         if (b.pierceHp && b.pierceHp > 1) {
-            b.pierceHp--; 
+            b.pierceHp--;
         } else {
             destroy(b);
         }
@@ -1414,12 +1448,14 @@ scene("lose", (finalScore, finalPhase) => {
         add([text("--- GLOBAL TOP 5 ---", { size: 16, font: "bebas" }), pos(center().x, center().y + 5), anchor("center"), color(150, 170, 185)]);
 
         // Loop through Google database response and paint rows onto player's window
+        // Loop through Google database response and paint rows onto player's window
         globalTopFive.forEach((entry, idx) => {
             let spacingOffset = 30 + (idx * 22);
-            let rowColor = rgb(255, 255, 255);
+            let rowColor = rgb(255, 255, 255); // Default for 4th and 5th
 
-            if (idx === 0) rowColor = rgb(255, 215, 0);   // 🥇 1st Place
-            if (idx === 1) rowColor = rgb(192, 192, 192);  // 🥈 2nd Place
+            if (idx === 0) rowColor = rgb(255, 215, 0);   // 🥇 1st Place: Gold
+            if (idx === 1) rowColor = rgb(192, 192, 192);  // 🥈 2nd Place: Silver
+            if (idx === 2) rowColor = rgb(205, 127, 50);   // 🥉 3rd Place: Classic Bronze / Brown
 
             // Highlight current player session across the global board in bright green!
             if (entry.name === currentPlayerName && entry.tag === currentPlayerTag && Number(entry.score) === Number(finalScore)) {
