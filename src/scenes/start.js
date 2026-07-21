@@ -64,6 +64,7 @@ export default function loadStartScene() {
             color(8, 12, 10),
             opacity(0.85),
             outline(1, rgb(0, 255, 150)),
+            scale(1),
             fixed(),
             z(1)
         ]);
