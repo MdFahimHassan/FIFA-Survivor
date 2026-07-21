@@ -1,0 +1,212 @@
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(ellipse at center, #10201a 0%, #050a08 75%, #030504 100%);
+}
+
+body {
+    display: block;
+}
+
+canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Soft darkening toward the screen edges - a cheap, permanent atmosphere layer that sits
+   above the canvas but below every interactive overlay (joystick, shop, pause menu, etc).
+   Pure CSS radial-gradient rather than approximating one out of Kaboom rects, since a
+   smooth gradient is trivial here and would be fiddly and expensive to fake in-canvas. */
+#screen-vignette {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.32) 100%);
+}
+
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* ==========================================
+   MOBILE TOUCH CONTROLS (src/mobile_controls.js)
+   ========================================== */
+#touch-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    pointer-events: none; /* let taps fall through to the canvas by default */
+    font-family: "Arial", sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.tc-joystick-zone {
+    position: absolute;
+    left: max(16px, env(safe-area-inset-left));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    width: 140px;
+    height: 140px;
+    pointer-events: auto;
+    touch-action: none;
+}
+
+.tc-joystick-base {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: rgba(10, 20, 16, 0.35);
+    border: 2px solid rgba(0, 255, 150, 0.45);
+    transition: border-color 0.15s ease;
+}
+
+.tc-joystick-base.tc-active {
+    border-color: rgba(255, 215, 0, 0.75);
+}
+
+.tc-joystick-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 56px;
+    height: 56px;
+    margin-left: -28px;
+    margin-top: -28px;
+    border-radius: 50%;
+    background: rgba(0, 255, 150, 0.55);
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    will-change: transform;
+}
+
+.tc-action-zone {
+    position: absolute;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 14px;
+    pointer-events: none;
+}
+
+.tc-action-row {
+    display: flex;
+    gap: 14px;
+    pointer-events: none;
+}
+
+.tc-btn {
+    pointer-events: auto;
+    touch-action: none;
+    border-radius: 50%;
+    width: 64px;
+    height: 64px;
+    background: rgba(10, 20, 16, 0.55);
+    color: #eaffef;
+    font: 700 12px/1 "Arial", sans-serif;
+    letter-spacing: 0.5px;
+    border: 2px solid rgba(0, 215, 255, 0.6);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.tc-btn:active {
+    background: rgba(0, 215, 255, 0.35);
+    border-color: rgba(255, 215, 0, 0.8);
+}
+
+.tc-btn-shop {
+    width: 84px;
+    height: 40px;
+    border-radius: 8px;
+    border-color: rgba(255, 215, 0, 0.6);
+}
+
+.tc-btn-pause {
+    width: 84px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 14px;
+    letter-spacing: 3px;
+}
+
+/* ==========================================
+   PAUSE MENU (src/pause_menu.js)
+   ========================================== */
+#pause-menu {
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(4, 8, 6, 0.72);
+    backdrop-filter: blur(2px);
+    font-family: "Arial", sans-serif;
+}
+
+.pm-panel {
+    width: min(320px, 84vw);
+    background: rgba(14, 20, 17, 0.96);
+    border: 2px solid rgba(0, 215, 140, 0.55);
+    border-radius: 10px;
+    padding: 28px 26px 22px;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.pm-title {
+    color: #fff;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+.pm-btn {
+    display: block;
+    width: 100%;
+    padding: 12px 10px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.pm-resume {
+    background: rgb(0, 215, 140);
+    color: #06140f;
+}
+
+.pm-resume:hover {
+    background: rgb(20, 235, 160);
+}
+
+.pm-quit {
+    background: rgba(255, 255, 255, 0.08);
+    color: #eaffef;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.pm-quit:hover {
+    background: rgba(255, 90, 90, 0.18);
+    border-color: rgba(255, 90, 90, 0.5);
+}
+
+.pm-hint {
+    color: rgba(234, 255, 239, 0.55);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+}

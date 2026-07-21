@@ -1,0 +1,11 @@
+# Files/folders listed here are excluded from the Vercel deployment entirely (they
+# still live in your git repo, just never get uploaded/served publicly).
+#
+# src/leaderboard_cleanup/leaderboard_cleanup.html is an admin-only tool (scans/deletes
+# duplicate leaderboard docs using the same Firebase config as the game). It has no
+# login of its own - it was relying on nobody guessing the URL, which isn't real
+# security. Firestore's `allow delete: if false` rule is what actually protects the data
+# now, but there's no reason to also leave the tool itself sitting on a public URL where
+# anyone who finds it can browse the raw leaderboard collection. Run it locally instead
+# (open the file directly from your machine) whenever you need to de-dupe entries.
+src/leaderboard_cleanup/

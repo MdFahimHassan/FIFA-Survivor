@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIFA Survivor - Last Team Standing</title>
+    <meta name="description" content="A fast-paced arcade survival game. Dodge, dash, and shoot your way through an endless World Cup of rival nations. Built solo for BUCC (BRAC University Computer Club).">
+
+    <!-- Favicons (generated from sprites/loading_ball.png - the FIFA 26 "Trionda" football) -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+
+    <!-- PWA: lets the game be added to a phone's home screen with a real icon -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00ff96">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FIFA Survivor">
+
+    <!-- NOTE: og:image/twitter:image must be an ABSOLUTE url to render in link previews
+         (Discord, WhatsApp, X, etc. won't fetch a relative path). Once deployed, replace
+         YOUR-DOMAIN below with the real Vercel domain, e.g. https://fifa-survivor.vercel.app -->
+    <meta property="og:title" content="FIFA Survivor - Last Team Standing">
+    <meta property="og:description" content="Survive an endless World Cup of rival nations. How far can you go?">
+    <meta property="og:image" content="https://YOUR-DOMAIN.vercel.app/sprites/SS.jpg">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="FIFA Survivor - Last Team Standing">
+    <meta name="twitter:description" content="Survive an endless World Cup of rival nations. How far can you go?">
+    <meta name="twitter:image" content="https://YOUR-DOMAIN.vercel.app/sprites/SS.jpg">
+
+    <!-- Pinned to an exact version - unpkg's unversioned /kaboom/ URL resolves to
+         whatever is currently "latest", which could ship a breaking change under us
+         with zero warning. Pin, then bump deliberately when ready to test a newer one. -->
+    <script src="https://unpkg.com/kaboom@3000.1.17/dist/kaboom.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Vercel Web Analytics (plain-HTML integration - no build step needed). Only
+         reports data once deployed on Vercel AND Web Analytics is turned on for this
+         project in the Vercel dashboard; harmless no-op everywhere else (including
+         local dev). -->
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+    <div id="screen-vignette"></div>
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>

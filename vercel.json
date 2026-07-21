@@ -1,0 +1,16 @@
+{
+    "headers": [
+        {
+            "source": "/(sprites|audios|fonts|icons)/(.*)",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=604800" }
+            ]
+        },
+        {
+            "source": "/(favicon.ico|manifest.json)",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=86400" }
+            ]
+        }
+    ]
+}

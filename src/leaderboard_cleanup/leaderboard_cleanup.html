@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FIFA Survivor - Leaderboard Cleanup</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" onerror="window.__fbLoadError=true"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js" onerror="window.__fbLoadError=true"></script>
+<style>
+  body { font-family: monospace; background: #0a0e0c; color: #eee; padding: 24px; max-width: 800px; margin: 0 auto; }
+  h1 { color: #ffd700; }
+  button { background: #00b478; color: #fff; border: none; padding: 10px 18px; font-family: monospace; font-size: 15px; cursor: pointer; border-radius: 4px; margin-right: 8px; }
+  button:disabled { background: #555; cursor: not-allowed; }
+  #log { margin-top: 20px; white-space: pre-wrap; background: #111; padding: 14px; border-radius: 6px; border: 1px solid #333; max-height: 500px; overflow-y: auto; }
+  .dup { color: #ff6b6b; }
+  .keep { color: #6bff8f; }
+  .warn { color: #ffd700; }
+</style>
+</head>
+<body>
+
+<h1>Leaderboard Duplicate Cleanup</h1>
+<p>This scans the <code>leaderboard</code> collection in your Firestore project, groups entries by
+   <code>name + tag + score</code>, keeps one copy of each, and deletes the rest.</p>
+<p><strong>Step 1</strong>: Click "Scan" to preview what will be deleted (nothing is deleted yet).<br>
+   <strong>Step 2</strong>: Review the log, then click "Delete Duplicates" to actually remove them.</p>
+
+<button id="scanBtn">1. Scan for Duplicates</button>
+<button id="deleteBtn" disabled>2. Delete Duplicates</button>
+<button id="listAllBtn">Debug: List Every Entry (raw)</button>
+
+<div id="log">Ready.</div>
+
+<script>
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
+
+async function ensureFirebaseLoaded() {
+    if (typeof firebase !== "undefined") return true;
+    log("Primary Firebase CDN (gstatic.com) failed to load. Retrying with a fallback CDN (jsdelivr)...", "warn");
+    try {
+        await loadScript("https://cdn.jsdelivr.net/npm/firebase@8.10.1/firebase-app.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/firebase@8.10.1/firebase-firestore.js");
+        if (typeof firebase !== "undefined") {
+            log("Fallback CDN loaded successfully.", "keep");
+            return true;
+        }
+    } catch (e) {
+        log("Fallback CDN also failed: " + e, "dup");
+    }
+    return false;
+}
+
+const firebaseConfig = {
+    apiKey: "AIzaSyCyd3jbU1m_Zshl63C1NBHN_AJgLxUCQxs",
+    authDomain: "fifa-survivor.firebaseapp.com",
+    projectId: "fifa-survivor",
+    storageBucket: "fifa-survivor.firebasestorage.app",
+    messagingSenderId: "687618423281",
+    appId: "1:687618423281:web:444317f725a63726986c50"
+};
+
+let db, scoresCollection;
+
+const logEl = document.getElementById("log");
+const scanBtn = document.getElementById("scanBtn");
+const deleteBtn = document.getElementById("deleteBtn");
+const listAllBtn = document.getElementById("listAllBtn");
+scanBtn.disabled = true;
+listAllBtn.disabled = true;
+
+function log(msg, cls) {
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = msg;
+    logEl.appendChild(line);
+}
+
+(async function init() {
+    log("Checking Firebase SDK...");
+    const ok = await ensureFirebaseLoaded();
+    if (!ok) {
+        log("\nCould not load the Firebase SDK from any CDN.", "dup");
+        log("This is almost always one of:", "warn");
+        log("  1. An ad-blocker or privacy extension blocking gstatic.com / jsdelivr.net (try disabling it for this page, or use an incognito window).");
+        log("  2. A school/office network firewall blocking Google/CDN domains.");
+        log("  3. No internet connection at all.");
+        log("\nTry opening this file on a different network (e.g. mobile hotspot), or in a different browser.", "warn");
+        return;
+    }
+    log("Firebase SDK loaded.", "keep");
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        // Some networks (school/office proxies, certain VPNs/ad-blockers) break
+        // Firestore's default streaming WebChannel transport. Forcing long-polling
+        // avoids that "Could not reach Cloud Firestore backend" error.
+        db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
+        scoresCollection = db.collection("leaderboard");
+        log("Connected. Ready to scan.", "keep");
+        scanBtn.disabled = false;
+        listAllBtn.disabled = false;
+    } catch (e) {
+        log("Firebase failed to initialize: " + e.message, "dup");
+    }
+})();
+
+let idsToDelete = [];
+
+// Fixed seed IDs written by the game's seedInitialBenchmarks(). If a group
+// contains one of these, prefer keeping that one so the "canonical" benchmark
+// entry survives instead of an arbitrary old auto-generated one.
+const SEED_IDS = new Set(["seed_fahim_dev", "seed_raphy", "seed_abir", "seed_ren", "seed_sloth"]);
+
+scanBtn.onclick = async () => {
+    idsToDelete = [];
+    scanBtn.disabled = true;
+    deleteBtn.disabled = true;
+    log("\nFetching all leaderboard entries...");
+
+    try {
+        const snapshot = await scoresCollection.get({ source: "server" });
+        log(`Found ${snapshot.size} total entries.`);
+
+        const groups = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const key = `${(data.name || "").trim()}|${(data.tag || "").trim()}|${data.score}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push({ id: doc.id, ...data });
+        });
+
+        let dupGroupCount = 0;
+        for (const key in groups) {
+            const entries = groups[key];
+            if (entries.length <= 1) continue;
+            dupGroupCount++;
+
+            // Prefer keeping a canonical seed_ doc if present, else keep the
+            // one with the earliest timestamp, else just keep the first.
+            let keeper = entries.find(e => SEED_IDS.has(e.id));
+            if (!keeper) {
+                keeper = entries.slice().sort((a, b) => {
+                    const ta = a.timestamp ? a.timestamp.toMillis() : Infinity;
+                    const tb = b.timestamp ? b.timestamp.toMillis() : Infinity;
+                    return ta - tb;
+                })[0];
+            }
+
+            log(`\n"${entries[0].name}${entries[0].tag || ""}" : $${entries[0].score}  (${entries.length} copies)`);
+            entries.forEach(e => {
+                if (e.id === keeper.id) {
+                    log(`  KEEP   ${e.id}`, "keep");
+                } else {
+                    log(`  DELETE ${e.id}`, "dup");
+                    idsToDelete.push(e.id);
+                }
+            });
+        }
+
+        if (dupGroupCount === 0) {
+            log("\nNo duplicates found. Nothing to clean up.", "keep");
+        } else {
+            log(`\n${idsToDelete.length} duplicate document(s) will be deleted across ${dupGroupCount} group(s).`, "warn");
+            deleteBtn.disabled = false;
+        }
+    } catch (e) {
+        log("Error: " + e.message, "dup");
+    }
+    scanBtn.disabled = false;
+};
+
+listAllBtn.onclick = async () => {
+    listAllBtn.disabled = true;
+    log("\nFetching every raw entry from the server...");
+    try {
+        const snapshot = await scoresCollection.get({ source: "server" });
+        log(`Server returned ${snapshot.size} document(s):`, "keep");
+        snapshot.forEach(doc => {
+            const d = doc.data();
+            log(`  [${doc.id}]  ${d.name || "?"}${d.tag || ""} : $${d.score}`);
+        });
+        if (snapshot.size === 0) {
+            log("Zero documents returned. Either the collection is genuinely empty, or the connection is still not reaching the server (check the browser console for errors).", "warn");
+        }
+    } catch (e) {
+        log("Error fetching raw list: " + e.message, "dup");
+    }
+    listAllBtn.disabled = false;
+};
+
+deleteBtn.onclick = async () => {
+    deleteBtn.disabled = true;
+    log(`\nDeleting ${idsToDelete.length} duplicate(s)...`, "warn");
+    let done = 0;
+    for (const id of idsToDelete) {
+        try {
+            await scoresCollection.doc(id).delete();
+            done++;
+        } catch (e) {
+            log(`Failed to delete ${id}: ${e.message}`, "dup");
+        }
+    }
+    log(`Done. Deleted ${done}/${idsToDelete.length} duplicate(s).`, "keep");
+    idsToDelete = [];
+};
+</script>
+</body>
+</html>
