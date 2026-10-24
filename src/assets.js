@@ -68,45 +68,50 @@ export function loadCriticalAssets() {
 // (see scenes/loading.js), which spreads that work out.
 
 
+// Each batch function RETURNS the assets it started, so the loading scene can wait for a
+// batch to finish before starting the next one (decoding two batches at once is what made
+// the loading screen hitch in the middle).
 export const deferredBatches = [
     // 1. Gameplay graphics. The small sprites live in ONE atlas image (sprites/atlas_misc.<hash>.png)
-    // registered under their usual names, so sprite("coin") etc. work unchanged. Every
-    // separate loadSprite() makes Kaboom re-upload its whole 2048x2048 texture atlas to the
-    // GPU, so ~55 tiny files meant ~55 big uploads (the loading-bar stutter). Rebuild the
-    // atlases with tools/build_atlases.py after changing any of these images.
+    // registered under their usual names, so sprite("coin") etc. work unchanged.
     // (grass_grain.png was loaded but never used anywhere, so it is no longer loaded.)
-    () => {
-        loadAtlasWithFallback(MISC_ATLAS_FILE, MISC_ATLAS, MISC_ORIGINALS);
+    () => [
+        loadAtlasWithFallback(MISC_ATLAS_FILE, MISC_ATLAS, MISC_ORIGINALS),
         // Animated 3D Coin Sheet (achievement toasts)
         loadSprite("coin_3d", "sprites/coin_3d.png", {
             sliceX: 9,
             anims: { spin: { from: 0, to: 7, loop: true, speed: 45 } }
-        });
-    },
-    // 2. Gameplay audio (the big ambience loop first, so it decodes while little else is happening)
-    () => {
-        loadSound("stadium_ambience", "audios/stadium_ambience.mp3");
-        loadSound("crowd_cheer", "audios/crowd_cheer.mp3");
-        loadSound("chime", "audios/chime.mp3");
-        loadSound("coin", "audios/coin_ping.mp3");
-        loadSound("heavy_whoosh", "audios/heavy_whoosh.mp3");
-        loadSound("kickoff_whistle", "audios/kick_off.mp3");
-        loadSound("ball_kick", "audios/ball_kick.mp3");
-    },
-    // 3. Achievement stingers + menu easter-egg celebration clips
-    () => {
-        loadSound("achievement", "audios/achievement.mp3");
-        loadSound("rare_achievement", "audios/rare_achievement.mp3");
-        loadSound("egg_ronaldo", "audios/ronaldo_hype.mp3");
-        loadSound("egg_messi", "audios/messi_hype.mp3");
-        loadSound("egg_neymar", "audios/neymar_hype.mp3");
-        loadSound("egg_mbappe", "audios/mbappe_hype.mp3");
-        loadSound("egg_haaland", "audios/haaland_hype.mp3");
-        loadSound("egg_bellingham", "audios/bellingham_hype.mp3");
-        loadSound("egg_salah", "audios/salah_hype.mp3");
-    },
-    // 4. National flags (team select grid): one atlas, each flag still addressable by country name
-    () => loadAtlasWithFallback(FLAGS_ATLAS_FILE, FLAGS_ATLAS, {})
+        })
+    ],
+    // 2. National flags (team select grid): one atlas, each flag still addressable by country name
+    () => [loadAtlasWithFallback(FLAGS_ATLAS_FILE, FLAGS_ATLAS, {})],
+    // 3. Gameplay audio. The big ambience loop goes alone so its decode never overlaps another.
+    () => [loadSound("stadium_ambience", "audios/stadium_ambience.mp3")],
+    () => [
+        loadSound("crowd_cheer", "audios/crowd_cheer.mp3"),
+        loadSound("chime", "audios/chime.mp3"),
+        loadSound("coin", "audios/coin_ping.mp3"),
+        loadSound("heavy_whoosh", "audios/heavy_whoosh.mp3"),
+        loadSound("kickoff_whistle", "audios/kick_off.mp3"),
+        loadSound("ball_kick", "audios/ball_kick.mp3")
+    ],
+    // 4. Achievement stingers
+    () => [
+        loadSound("achievement", "audios/achievement.mp3"),
+        loadSound("rare_achievement", "audios/rare_achievement.mp3")
+    ],
+    // 5. Menu easter-egg celebration clips (two at a time)
+    () => [
+        loadSound("egg_ronaldo", "audios/ronaldo_hype.mp3"),
+        loadSound("egg_messi", "audios/messi_hype.mp3"),
+        loadSound("egg_neymar", "audios/neymar_hype.mp3")
+    ],
+    () => [
+        loadSound("egg_mbappe", "audios/mbappe_hype.mp3"),
+        loadSound("egg_haaland", "audios/haaland_hype.mp3"),
+        loadSound("egg_bellingham", "audios/bellingham_hype.mp3"),
+        loadSound("egg_salah", "audios/salah_hype.mp3")
+    ]
 ];
 
 // Convenience: start every batch immediately (not used by the loading scene any more).

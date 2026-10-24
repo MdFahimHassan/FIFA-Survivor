@@ -11,15 +11,35 @@ export default function loadLoadingScene() {
         // (loadProgress()) but never finishes before this minimum, so the screen doesn't flash by.
         // Raise/lower this number to taste.
         const MIN_LOADING_TIME = 2.8;
-        // Start the remaining asset batches one at a time, spread across the first ~1.2s,
-        // instead of all in one frame (that burst of decoding is what caused the stutter).
-        const BATCH_GAP = 0.25;
+        // Run the remaining asset batches ONE AT A TIME: start a batch, wait until every
+        // asset in it has finished (downloaded + decoded / uploaded), pause a beat, then
+        // start the next. The old version started them on a fixed timer, so on a slow
+        // device or connection several batches finished decoding in the same frames and
+        // the bar froze for a moment mid-load. If a batch is slow, MAX_BATCH_WAIT stops it
+        // from holding everything else up.
+        const BATCH_GAP = 0.12;
+        const MAX_BATCH_WAIT = 2.5;
         let batchesStarted = 0;
-        deferredBatches.forEach((startBatch, i) => {
-            wait(0.1 + i * BATCH_GAP, () => { startBatch(); batchesStarted++; });
-        });
-        // Firebase's SDK is parsed on the main thread too, so it goes after the asset batches.
-        wait(0.1 + deferredBatches.length * BATCH_GAP + 0.3, preloadFirebase);
+        const runBatch = (i) => {
+            if (i >= deferredBatches.length) {
+                // Firebase's SDK is parsed on the main thread too, so it goes after all assets.
+                wait(0.3, preloadFirebase);
+                return;
+            }
+            const assets = [].concat(deferredBatches[i]() || []);
+            batchesStarted++;
+            let advanced = false;
+            const advance = () => {
+                if (advanced) return;
+                advanced = true;
+                wait(BATCH_GAP, () => runBatch(i + 1));
+            };
+            let pending = assets.length;
+            if (!pending) return advance();
+            assets.forEach((a) => a.onFinish(() => { if (--pending <= 0) advance(); }));
+            wait(MAX_BATCH_WAIT, advance);
+        };
+        wait(0.1, () => runBatch(0));
         let elapsed = 0;
         let progress = 0;
         const barMaxWidth = 280;
