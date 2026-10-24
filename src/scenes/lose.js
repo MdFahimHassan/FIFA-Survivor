@@ -54,9 +54,18 @@ export default function loadLoseScene() {
             add([text(msg, { size: 14, font: "bebas" }), pos(center().x, height() * 0.85), anchor("center"), color(255, 130, 130), outline(1, rgb(10, 10, 10))]);
         }
 
+        // The leaderboard calls below finish later (sometimes seconds later). If the player has
+        // already left this screen (e.g. tapped MAIN MENU), add() would draw the Top-5 / standing
+        // rows onto whatever scene is active NOW. This marker dies with the scene, so every
+        // await below can check it and bail out.
+        const sceneMarker = add([]);
+        const sceneGone = () => !sceneMarker.exists();
+
         async function processCloudStandings() {
             const saveStatus = await saveScoreToLeaderboard(finalScore, elapsedSeconds);
+            if (sceneGone()) return;
             const globalTopFive = await getGlobalTopFive();
+            if (sceneGone()) return;
             destroy(syncStatus);
 
             if (!globalTopFive) {
@@ -96,7 +105,7 @@ export default function loadLoseScene() {
             if (playerInTopFive) unlockAchievement("leaderboard_material");
             if (!playerInTopFive) {
                 const standing = await getPlayerStanding(finalScore);
-                if (standing) {
+                if (standing && !sceneGone()) {
                     const standingHeaderY = listTop + 30 + (5 * rowStep) + 10;
                     const standingRowY = standingHeaderY + 24;
                     const tieNote = standing.tieCount > 1 ? ` (TIED WITH ${standing.tieCount - 1} OTHER${standing.tieCount - 1 > 1 ? "S" : ""})` : "";
