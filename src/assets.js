@@ -9,6 +9,31 @@ export const countriesList = [
     "south_africa", "south_korea", "spain", "sweden", "switzerland", "tunisia", "turkey", "uruguay", "usa", "uzbekistan"
 ];
 
+// Loads a sprite atlas, and if the atlas image fails to load (404 after a deploy, flaky
+// network, bad cache) falls back to loading the original small PNGs one by one.
+// Without this, Kaboom still reports the atlas as "finished" and the game later crashes with
+// "Sprite not found: <name>" the first time a flag or coin is drawn. The fallback is slower
+// (many separate textures) but keeps the game playable, and the console says what went wrong.
+function loadAtlasWithFallback(file, data, originalFiles) {
+    const asset = loadSpriteAtlas(file, data);
+    asset.onError((err) => {
+        console.error(`Sprite atlas "${file}" failed to load; falling back to individual images.`, err);
+        for (const name of Object.keys(data)) {
+            loadSprite(name, originalFiles[name] || `sprites/${name}.png`);
+        }
+    });
+    return asset;
+}
+
+// Source images the atlases are built from (see tools/build_atlases.py).
+const MISC_ORIGINALS = {
+    coin: "sprites/coin.png",
+    golden_ball: "sprites/golden_ball.png",
+    ball: "sprites/ball.png",
+    slide_icon: "sprites/slide_icon.png",
+    bicycle_kick: "sprites/bycycle_kick.png"
+};
+
 // Loading is split in two so the first screen appears fast:
 //   1. loadCriticalAssets() - only what the interaction gate, loading screen, menu and
 //      name prompt need. The loading bar tracks THIS set (see scenes/loading.js).
@@ -51,7 +76,7 @@ export const deferredBatches = [
     // atlases with tools/build_atlases.py after changing any of these images.
     // (grass_grain.png was loaded but never used anywhere, so it is no longer loaded.)
     () => {
-        loadSpriteAtlas(MISC_ATLAS_FILE, MISC_ATLAS);
+        loadAtlasWithFallback(MISC_ATLAS_FILE, MISC_ATLAS, MISC_ORIGINALS);
         // Animated 3D Coin Sheet (achievement toasts)
         loadSprite("coin_3d", "sprites/coin_3d.png", {
             sliceX: 9,
@@ -81,7 +106,7 @@ export const deferredBatches = [
         loadSound("egg_salah", "audios/salah_hype.mp3");
     },
     // 4. National flags (team select grid): one atlas, each flag still addressable by country name
-    () => loadSpriteAtlas(FLAGS_ATLAS_FILE, FLAGS_ATLAS)
+    () => loadAtlasWithFallback(FLAGS_ATLAS_FILE, FLAGS_ATLAS, {})
 ];
 
 // Convenience: start every batch immediately (not used by the loading scene any more).
