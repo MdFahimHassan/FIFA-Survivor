@@ -1,4 +1,5 @@
 import { addBranding, fadeInScene, riseIn, consumeReturnContext } from "../helpers.js";
+import { IS_TOUCH } from "../viewport.js";
 
 export default function loadInstructionsScene() {
     scene("instructions", () => {
@@ -21,18 +22,21 @@ export default function loadInstructionsScene() {
             }
         });
 
-        const panel = add([rect(width() * 0.7, height() * 0.6, { radius: 8 }), pos(center()), anchor("center"), color(10, 16, 14), opacity(0.85), outline(2, rgb(0, 255, 150)), z(1)]);
+        // Compact (touch) layout: taller/wider panel, buttons side by side underneath it.
+        const panel = add([rect(width() * (IS_TOUCH ? 0.8 : 0.7), height() * (IS_TOUCH ? 0.72 : 0.6), { radius: 8 }), pos(IS_TOUCH ? vec2(width() / 2, height() * 0.46) : center()), anchor("center"), color(10, 16, 14), opacity(0.85), outline(2, rgb(0, 255, 150)), z(1)]);
         if (!isHelpMode) addBranding();
 
-        const heading = add([text(isHelpMode ? "QUICK REFRESHER" : "HOW TO PLAY", { size: 44, font: "bebas" }), pos(width() / 2, height() * 0.26), anchor("center"), color(255, 215, 0), opacity(1), z(2)]);
+        const heading = add([text(isHelpMode ? "QUICK REFRESHER" : "HOW TO PLAY", { size: 44, font: "bebas" }), pos(width() / 2, height() * (IS_TOUCH ? 0.17 : 0.26)), anchor("center"), color(255, 215, 0), opacity(1), z(2)]);
         const mission = add([
             text("MISSION:\nSurvive the defensive pressure! Collect coins\nto purchase attributes inside the item shop and \nCollect Golden Balls to proceed to the next Match.\nReach the Final and win to emerge on the Leaderboards!!", { size: 20, font: "teko", align: "center", lineSpacing: 4 }),
-            pos(width() / 2, height() * 0.42), anchor("center"), color(240, 240, 240), opacity(1), z(2)
+            pos(width() / 2, height() * (IS_TOUCH ? 0.35 : 0.42)), anchor("center"), color(240, 240, 240), opacity(1), z(2)
         ]);
 
         const controls = add([
-            text("CONTROLS:\n[WASD / ARROWS] : Move Striker\n[SHIFT] : Slide Tackle Dash (Invincible + Cleaves Rivals)\n[SPACE] : Bicycle Shockwave Kick (Massive Area Deflection)\n[E] : Open Strategy Upgrade Shop Matrix", { size: 16, font: "teko", align: "center", lineSpacing: 3 }),
-            pos(width() / 2, height() * 0.63), anchor("center"), color(0, 215, 140), opacity(1), z(2)
+            text(IS_TOUCH
+                ? "CONTROLS:\nLEFT JOYSTICK : Move Striker\n[DASH] : Slide Tackle Dash (Invincible + Cleaves Rivals)\n[KICK] : Bicycle Shockwave Kick (Massive Area Deflection)\n[SHOP] : Open Strategy Upgrade Shop Matrix"
+                : "CONTROLS:\n[WASD / ARROWS] : Move Striker\n[SHIFT] : Slide Tackle Dash (Invincible + Cleaves Rivals)\n[SPACE] : Bicycle Shockwave Kick (Massive Area Deflection)\n[E] : Open Strategy Upgrade Shop Matrix", { size: 16, font: "teko", align: "center", lineSpacing: 3 }),
+            pos(width() / 2, height() * (IS_TOUCH ? 0.62 : 0.63)), anchor("center"), color(0, 215, 140), opacity(1), z(2)
         ]);
 
         riseIn(panel, 0, 24, 0.4);
@@ -42,7 +46,7 @@ export default function loadInstructionsScene() {
 
         let beginHovering = false;
         const btnLabel = isHelpMode ? "< BACK" : "KICK OFF MATCH";
-        const beginBtn = add([rect(180, 38, { radius: 4 }), pos(width() / 2, height() * 0.78), anchor("center"), opacity(1), color(20, 25, 22), outline(1.5, rgb(255, 215, 0)), area(), z(2)]);
+        const beginBtn = add([rect(IS_TOUCH ? 220 : 180, IS_TOUCH ? 44 : 38, { radius: 4 }), pos(IS_TOUCH && !isHelpMode ? width() / 2 + 120 : width() / 2, IS_TOUCH ? height() * 0.91 : height() * 0.78), anchor("center"), opacity(1), color(20, 25, 22), outline(1.5, rgb(255, 215, 0)), area(), z(2)]);
         const beginText = beginBtn.add([text(btnLabel, { size: 16, font: "bebas" }), anchor("center"), color(255, 255, 255), opacity(1)]);
         riseIn(beginBtn, 0.58, 14, 0.35);
         riseIn(beginText, 0.58, 0, 0.35);
@@ -87,7 +91,7 @@ export default function loadInstructionsScene() {
         // HELP button already gets "< BACK" via btnLabel above, but that path returns to
         // the win/lose screen, not team select, so this is a separate secondary button.
         if (!isHelpMode) {
-            const backBtn = add([rect(150, 38, { radius: 4 }), pos(width() / 2, height() * 0.86), anchor("center"), opacity(1), color(14, 18, 16), outline(1.2, rgb(0, 180, 130)), area(), z(2)]);
+            const backBtn = add([rect(IS_TOUCH ? 180 : 150, IS_TOUCH ? 44 : 38, { radius: 4 }), pos(IS_TOUCH ? width() / 2 - 120 : width() / 2, IS_TOUCH ? height() * 0.91 : height() * 0.86), anchor("center"), opacity(1), color(14, 18, 16), outline(1.2, rgb(0, 180, 130)), area(), z(2)]);
             const backText = backBtn.add([text("< BACK", { size: 14, font: "bebas" }), anchor("center"), color(220, 230, 225), opacity(1)]);
             riseIn(backBtn, 0.66, 12, 0.3);
             riseIn(backText, 0.66, 0, 0.3);

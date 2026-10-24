@@ -6,34 +6,35 @@
 // with the exact same functions the keyboard shortcuts use - so there is only ever one
 // implementation of each action, keyboard and touch just both trigger it.
 //
-// The whole overlay only renders on devices that report touch support, and only shows
-// its gameplay buttons while window.gameInputActive is true (set by main.js while a
-// match is in progress). On desktop, or while looking at a menu/shop/result screen, it
-// stays hidden and inert.
+// The whole overlay only renders on touch devices, and only shows its gameplay buttons
+// while window.gameInputActive is true (set by main.js while a match is in progress). On
+// desktop, or while looking at a menu/shop/result screen, it stays hidden and inert.
+//
+// The buttons ARE the touch player's skill icons: DASH and KICK show their own cooldown
+// countdown (read from window.gameInput.getState()), and SHOP glows when an upgrade is
+// affordable - so the in-canvas skill slots and "[E] STRATEGY SHOP" hint used on desktop
+// are not drawn on touch screens (see main.js).
 
 import { session } from "./config.js";
-
-function isTouchDevice() {
-    return ("ontouchstart" in window) || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
-}
+import { IS_TOUCH } from "./viewport.js";
 
 export function initMobileControls() {
-    if (!isTouchDevice()) return;
+    if (!IS_TOUCH) return;
 
     const root = document.createElement("div");
     root.id = "touch-controls";
     root.innerHTML = `
+        <button class="tc-btn tc-btn-pause" type="button" aria-label="Pause">II</button>
         <div class="tc-joystick-zone">
             <div class="tc-joystick-base">
                 <div class="tc-joystick-knob"></div>
             </div>
         </div>
         <div class="tc-action-zone">
-            <button class="tc-btn tc-btn-pause" type="button">II</button>
             <button class="tc-btn tc-btn-shop" type="button">SHOP</button>
             <div class="tc-action-row">
-                <button class="tc-btn tc-btn-dash" type="button">DASH</button>
-                <button class="tc-btn tc-btn-kick" type="button">KICK</button>
+                <button class="tc-btn tc-btn-dash" type="button">DASH<span class="tc-cd"></span></button>
+                <button class="tc-btn tc-btn-kick" type="button">KICK<span class="tc-cd"></span></button>
             </div>
         </div>
     `;
@@ -48,7 +49,6 @@ export function initMobileControls() {
     const pauseBtn = root.querySelector(".tc-btn-pause");
 
     // --- Joystick ---
-    const MAX_KNOB_OFFSET = 40; // px the knob can travel from center before clamping
     let activeJoystickPointerId = null;
 
     function resetJoystick() {
@@ -63,17 +63,20 @@ export function initMobileControls() {
         const rect = joystickBase.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
+        // How far the knob may travel from the centre: the base radius minus the knob radius
+        // (the base size follows the screen height, so this can't be a fixed pixel number).
+        const maxOffset = Math.max(1, rect.width * 0.3);
         let dx = clientX - centerX;
         let dy = clientY - centerY;
         const dist = Math.hypot(dx, dy);
-        if (dist > MAX_KNOB_OFFSET) {
-            dx = (dx / dist) * MAX_KNOB_OFFSET;
-            dy = (dy / dist) * MAX_KNOB_OFFSET;
+        if (dist > maxOffset) {
+            dx = (dx / dist) * maxOffset;
+            dy = (dy / dist) * maxOffset;
         }
         joystickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
         // Normalize to [-1, 1] on each axis for the movement update to consume directly.
-        session.run.touchVec.x = dx / MAX_KNOB_OFFSET;
-        session.run.touchVec.y = dy / MAX_KNOB_OFFSET;
+        session.run.touchVec.x = dx / maxOffset;
+        session.run.touchVec.y = dy / maxOffset;
     }
 
     joystickZone.addEventListener("pointerdown", (e) => {
@@ -108,11 +111,37 @@ export function initMobileControls() {
     bindTap(shopBtn, () => window.gameInput?.toggleShop?.());
     bindTap(pauseBtn, () => window.gameInput?.togglePause?.());
 
-    // Visibility follows whether a match is actually in progress, checked on a light
-    // interval rather than wiring into every scene transition. Hidden while paused too,
-    // so the only interactive thing on screen during a pause is the pause menu itself.
-    setInterval(() => {
-        root.style.display = (window.gameInputActive && !debug.paused) ? "block" : "none";
-    }, 150);
+    // --- Per-frame sync with the match ---
+    // Visible only while a match is in progress, and hidden while paused or while the shop
+    // is open (the shop has its own on-canvas RESUME button), so the only interactive thing
+    // on screen during those moments is the overlay that owns the screen.
+    const dashCd = dashBtn.querySelector(".tc-cd");
+    const kickCd = kickBtn.querySelector(".tc-cd");
+    let wasVisible = false;
+    function frame() {
+        const visible = !!window.gameInputActive && !debug.paused && !session.run.isUpgrading;
+        if (visible !== wasVisible) {
+            root.style.display = visible ? "block" : "none";
+            wasVisible = visible;
+            if (!visible) resetJoystick();
+        }
+        if (visible) {
+            const st = window.gameInput?.getState?.();
+            if (st) {
+                const setCd = (btn, label, secs) => {
+                    const cooling = secs > 0;
+                    btn.classList.toggle("tc-cooling", cooling);
+                    const txt = cooling ? String(Math.ceil(secs)) : "";
+                    if (label.textContent !== txt) label.textContent = txt;
+                };
+                setCd(dashBtn, dashCd, st.dashCooldown);
+                setCd(kickBtn, kickCd, st.kickCooldown);
+                shopBtn.classList.toggle("tc-glow-rare", !!st.endgameAffordable);
+                shopBtn.classList.toggle("tc-glow", !st.endgameAffordable && !!st.normalAffordable);
+            }
+        }
+        requestAnimationFrame(frame);
+    }
     root.style.display = "none";
+    requestAnimationFrame(frame);
 }

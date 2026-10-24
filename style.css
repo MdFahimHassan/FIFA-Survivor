@@ -3,6 +3,7 @@ html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
+    overscroll-behavior: none; /* no pull-to-refresh / rubber-banding while playing on a phone */
     background: radial-gradient(ellipse at center, #10201a 0%, #050a08 75%, #030504 100%);
 }
 
@@ -37,8 +38,11 @@ canvas {
 
 /* ==========================================
    MOBILE TOUCH CONTROLS (src/mobile_controls.js)
+   Sizes follow the screen HEIGHT (vh), so the same layout works on a small phone and a tablet.
    ========================================== */
 #touch-controls {
+    --tc-btn: clamp(54px, 17vh, 78px);
+    --tc-joy: clamp(110px, 36vh, 170px);
     position: fixed;
     inset: 0;
     z-index: 10000;
@@ -50,10 +54,10 @@ canvas {
 
 .tc-joystick-zone {
     position: absolute;
-    left: max(16px, env(safe-area-inset-left));
-    bottom: max(16px, env(safe-area-inset-bottom));
-    width: 140px;
-    height: 140px;
+    left: max(18px, env(safe-area-inset-left));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    width: var(--tc-joy);
+    height: var(--tc-joy);
     pointer-events: auto;
     touch-action: none;
 }
@@ -75,10 +79,10 @@ canvas {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 56px;
-    height: 56px;
-    margin-left: -28px;
-    margin-top: -28px;
+    width: 40%;
+    height: 40%;
+    margin-left: -20%;
+    margin-top: -20%;
     border-radius: 50%;
     background: rgba(0, 255, 150, 0.55);
     border: 2px solid rgba(255, 255, 255, 0.6);
@@ -87,12 +91,12 @@ canvas {
 
 .tc-action-zone {
     position: absolute;
-    right: max(16px, env(safe-area-inset-right));
-    bottom: max(16px, env(safe-area-inset-bottom));
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 14px;
+    gap: 12px;
     pointer-events: none;
 }
 
@@ -103,17 +107,20 @@ canvas {
 }
 
 .tc-btn {
+    position: relative;
     pointer-events: auto;
     touch-action: none;
     border-radius: 50%;
-    width: 64px;
-    height: 64px;
+    width: var(--tc-btn);
+    height: var(--tc-btn);
+    padding: 0;
     background: rgba(10, 20, 16, 0.55);
     color: #eaffef;
-    font: 700 12px/1 "Arial", sans-serif;
+    font: 700 clamp(11px, 3.4vh, 14px)/1 "Arial", sans-serif;
     letter-spacing: 0.5px;
     border: 2px solid rgba(0, 215, 255, 0.6);
     -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
 }
 
 .tc-btn:active {
@@ -121,19 +128,102 @@ canvas {
     border-color: rgba(255, 215, 0, 0.8);
 }
 
+.tc-btn-kick {
+    border-color: rgba(255, 215, 0, 0.65);
+}
+
 .tc-btn-shop {
-    width: 84px;
-    height: 40px;
-    border-radius: 8px;
+    width: calc(var(--tc-btn) * 1.45);
+    height: calc(var(--tc-btn) * 0.62);
+    border-radius: 10px;
     border-color: rgba(255, 215, 0, 0.6);
 }
 
+/* Shop button pulses when an upgrade is affordable (replaces the desktop "[E] STRATEGY SHOP" hint) */
+.tc-btn-shop.tc-glow {
+    border-color: rgba(255, 215, 0, 0.95);
+    animation: tc-pulse 1.1s ease-in-out infinite;
+}
+.tc-btn-shop.tc-glow-rare {
+    border-color: #ff5fd2;
+    animation: tc-pulse-rare 1.1s ease-in-out infinite;
+}
+@keyframes tc-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.0); background: rgba(10, 20, 16, 0.55); }
+    50% { box-shadow: 0 0 14px 3px rgba(255, 215, 0, 0.6); background: rgba(70, 55, 0, 0.6); }
+}
+@keyframes tc-pulse-rare {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 95, 210, 0.0); }
+    50% { box-shadow: 0 0 14px 3px rgba(120, 220, 255, 0.7); background: rgba(60, 20, 70, 0.6); }
+}
+
+/* Cooldown overlay on DASH / KICK: dims the button and shows the seconds left */
+.tc-btn .tc-cd {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5, 8, 6, 0.96);
+    font: 800 clamp(18px, 6vh, 26px)/1 "Arial", sans-serif;
+    color: #fff;
+}
+.tc-btn.tc-cooling .tc-cd {
+    display: flex;
+}
+
 .tc-btn-pause {
-    width: 84px;
-    height: 32px;
-    border-radius: 8px;
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+    width: clamp(38px, 11vh, 48px);
+    height: clamp(38px, 11vh, 48px);
+    border-radius: 10px;
+    font-size: 16px;
+    letter-spacing: 2px;
+}
+
+/* ==========================================
+   ROTATE-YOUR-PHONE OVERLAY (src/viewport.js adds it on touch devices only)
+   ========================================== */
+#rotate-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at center, #10201a 0%, #050a08 85%);
+    font-family: "Arial", sans-serif;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+}
+@media (orientation: portrait) {
+    .touch-ui #rotate-overlay { display: flex; }
+}
+.ro-phone {
+    width: 54px;
+    height: 92px;
+    margin: 0 auto 26px;
+    border: 4px solid #00ff96;
+    border-radius: 12px;
+    animation: ro-turn 2.4s ease-in-out infinite;
+}
+@keyframes ro-turn {
+    0%, 15% { transform: rotate(0deg); }
+    55%, 100% { transform: rotate(-90deg); }
+}
+.ro-title {
+    color: #ffe8a3;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+}
+.ro-sub {
+    color: rgba(234, 255, 239, 0.7);
     font-size: 14px;
-    letter-spacing: 3px;
 }
 
 /* ==========================================
@@ -209,4 +299,27 @@ canvas {
     font-size: 11px;
     letter-spacing: 0.5px;
     margin-top: 4px;
+}
+
+/* ==========================================
+   SHORT / LANDSCAPE PHONE SCREENS: keep DOM dialogs inside the screen
+   ========================================== */
+@media (max-height: 460px) {
+    .pm-panel {
+        padding: 14px 20px 12px;
+    }
+    .pm-title {
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+    .pm-btn {
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+    .pm-hint {
+        display: none;
+    }
+}
+.touch-ui .pm-hint {
+    display: none; /* "Press ESC to resume" makes no sense on a phone */
 }

@@ -1,6 +1,7 @@
 import { session, saveAudioSettings, savePlayerProfile } from "../config.js";
 import { fadeInScene, riseIn, punch, applyAudioSettingsToLoops, returnToPrevious } from "../helpers.js";
 import { resetAchievements } from "../achievements.js";
+import { IS_TOUCH } from "../viewport.js";
 
 export default function loadSettingsScene() {
     scene("settings", () => {
@@ -20,12 +21,13 @@ export default function loadSettingsScene() {
         // Layout: everything below is positioned relative to PANEL_TOP, not the title, so
         // there's no risk of a row ending up above the box it's supposed to live inside.
         const PANEL_WIDTH = 460;
-        const PANEL_HEIGHT = 400;
-        const PANEL_TOP = height() * 0.16;
+        const PANEL_HEIGHT = IS_TOUCH ? 392 : 400;
+        const PANEL_TOP = IS_TOUCH ? 62 : height() * 0.16;
+        const STEP_BTN = IS_TOUCH ? 36 : 24; // bigger +/- tap targets on touch
         const panelCenterY = PANEL_TOP + PANEL_HEIGHT / 2;
 
-        const titleShadow = add([text("SETTINGS", { size: 38, font: "bebas" }), pos(center().x + 3, PANEL_TOP - 38 + 3), anchor("center"), color(0, 0, 0), opacity(0.7)]);
-        const titleFace = add([text("SETTINGS", { size: 38, font: "bebas" }), pos(center().x, PANEL_TOP - 38), anchor("center"), color(255, 228, 160), outline(3, rgb(15, 15, 15))]);
+        const titleShadow = add([text("SETTINGS", { size: 38, font: "bebas" }), pos(center().x + 3, PANEL_TOP - (IS_TOUCH ? 30 : 38) + 3), anchor("center"), color(0, 0, 0), opacity(0.7)]);
+        const titleFace = add([text("SETTINGS", { size: 38, font: "bebas" }), pos(center().x, PANEL_TOP - (IS_TOUCH ? 30 : 38)), anchor("center"), color(255, 228, 160), outline(3, rgb(15, 15, 15))]);
         riseIn(titleShadow, 0.03);
         riseIn(titleFace, 0.03);
 
@@ -70,14 +72,14 @@ export default function loadSettingsScene() {
                 refresh();
             };
 
-            const minusBtn = add([rect(24, 24, { radius: 4 }), pos(BAR_X - 34, y), anchor("left"), color(20, 26, 23), outline(1, rgb(0, 180, 120)), area(), z(2)]);
-            minusBtn.add([text("-", { size: 16, font: "bebas" }), anchor("center"), pos(12, 12), color(255, 255, 255)]);
+            const minusBtn = add([rect(STEP_BTN, STEP_BTN, { radius: 4 }), pos(BAR_X - STEP_BTN - 10, y), anchor("left"), color(20, 26, 23), outline(1, rgb(0, 180, 120)), area(), z(2)]);
+            minusBtn.add([text("-", { size: 16, font: "bebas" }), anchor("center"), pos(STEP_BTN / 2, 0), color(255, 255, 255)]);
             minusBtn.onClick(() => { play("ui_click", { volume: 0.4 }); step(-0.1); });
             minusBtn.onHover(() => setCursor("pointer"));
 
-            const plusX = BAR_X + SEGMENTS * (segWidth + segGap) + 10;
-            const plusBtn = add([rect(24, 24, { radius: 4 }), pos(plusX, y), anchor("left"), color(20, 26, 23), outline(1, rgb(0, 180, 120)), area(), z(2)]);
-            plusBtn.add([text("+", { size: 16, font: "bebas" }), anchor("center"), pos(12, 12), color(255, 255, 255)]);
+            const plusX = BAR_X + SEGMENTS * (segWidth + segGap) + 8;
+            const plusBtn = add([rect(STEP_BTN, STEP_BTN, { radius: 4 }), pos(plusX, y), anchor("left"), color(20, 26, 23), outline(1, rgb(0, 180, 120)), area(), z(2)]);
+            plusBtn.add([text("+", { size: 16, font: "bebas" }), anchor("center"), pos(STEP_BTN / 2, 0), color(255, 255, 255)]);
             plusBtn.onClick(() => { play("ui_click", { volume: 0.4 }); step(0.1); });
             plusBtn.onHover(() => setCursor("pointer"));
         };
@@ -99,7 +101,13 @@ export default function loadSettingsScene() {
 
         // Controls reference
         add([text("CONTROLS", { size: 14, font: "bebas" }), pos(center().x, rowY(175)), anchor("center"), color(255, 215, 0), z(2)]);
-        const controlsLines = [
+        const controlsLines = IS_TOUCH ? [
+            "MOVE ................. LEFT JOYSTICK",
+            "DASH ................. DASH BUTTON",
+            "BICYCLE KICK ......... KICK BUTTON",
+            "STRATEGY SHOP ........ SHOP BUTTON",
+            "PAUSE ................ II BUTTON"
+        ] : [
             "MOVE ................. WASD / ARROWS",
             "DASH ................. SHIFT",
             "BICYCLE KICK ......... SPACE",
@@ -107,19 +115,19 @@ export default function loadSettingsScene() {
             "PAUSE ................ ESC"
         ];
         controlsLines.forEach((line, i) => {
-            add([text(line, { size: 12, font: "teko" }), pos(center().x, rowY(200 + i * 17)), anchor("center"), color(200, 210, 205), z(2)]);
+            add([text(line, { size: 12, font: "teko" }), pos(center().x, rowY(200 + i * (IS_TOUCH ? 21 : 17))), anchor("center"), color(200, 210, 205), z(2)]);
         });
 
         // Reset saved profile - genuinely useful for a shared/kiosk device (club fair
         // booth) where a lot of different people play on the same machine and don't
         // necessarily want the next player's name pre-filled with theirs.
         let resetArmed = false;
-        const resetBtn = add([rect(260, 32, { radius: 5 }), pos(center().x, rowY(330)), anchor("center"), color(30, 18, 18), outline(1, rgb(200, 70, 70)), scale(1), area(), z(2)]);
+        const resetBtn = add([rect(260, IS_TOUCH ? 38 : 32, { radius: 5 }), pos(center().x, rowY(IS_TOUCH ? 338 : 330)), anchor("center"), color(30, 18, 18), outline(1, rgb(200, 70, 70)), scale(1), area(), z(2)]);
         const resetLabel = resetBtn.add([text("RESET SAVED PROFILE", { size: 12, font: "bebas" }), anchor("center"), color(255, 180, 180)]);
         resetBtn.onClick(() => {
             if (!resetArmed) {
                 resetArmed = true;
-                resetLabel.text = "CLICK AGAIN TO CONFIRM";
+                resetLabel.text = IS_TOUCH ? "TAP AGAIN TO CONFIRM" : "CLICK AGAIN TO CONFIRM";
                 punch(resetBtn, 1.08);
                 wait(3, () => { resetArmed = false; resetLabel.text = "RESET SAVED PROFILE"; });
                 return;
@@ -138,7 +146,7 @@ export default function loadSettingsScene() {
 
         // Back - returns to wherever Settings was opened from (main menu by default, or
         // the win/lose recap if that's where the SETTINGS button was pressed).
-        const backBtn = add([rect(160, 42, { radius: 4 }), pos(center().x, height() * 0.93), anchor("center"), color(10, 16, 14), outline(1.5, rgb(0, 255, 150)), area(), z(2)]);
+        const backBtn = add([rect(160, 42, { radius: 4 }), pos(center().x, height() * (IS_TOUCH ? 0.94 : 0.93)), anchor("center"), color(10, 16, 14), outline(1.5, rgb(0, 255, 150)), area(), z(2)]);
         backBtn.add([text("< BACK", { size: 16, font: "bebas" }), anchor("center"), color(255, 255, 255)]);
         const goBack = () => { play("ui_click", { volume: 0.6 }); returnToPrevious("menu"); };
         backBtn.onClick(goBack);

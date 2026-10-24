@@ -2,12 +2,20 @@ import { session, savePlayerProfile } from "../config.js";
 import { countriesList } from "../assets.js";
 import { fadeInScene, riseIn, punch } from "../helpers.js";
 import { unlockAchievement } from "../achievements.js";
+import { IS_TOUCH } from "../viewport.js";
 
 export default function loadStartScene() {
     scene("start", () => {
         window.gameInputActive = false;
         debug.paused = false;
         fadeInScene(0.5);
+
+        // Compact (touch) layout: the 48-nation grid goes to 7 columns x 7 rows on the left and
+        // the team preview + START button sit in a narrow column on the right, so everything
+        // fits the short stage. Desktop keeps the original 5-column layout.
+        const COMPACT = IS_TOUCH;
+        const TITLE_Y = COMPACT ? 0.085 : 0.14;
+        const SUB_Y = COMPACT ? 0.16 : 0.20;
 
         const bg = add([sprite("stadium"), pos(center()), anchor("center"), scale(1), z(0)]);
         bg.onUpdate(() => {
@@ -17,16 +25,17 @@ export default function loadStartScene() {
             }
         });
 
+        const SUB_TEXT = COMPACT ? "TAP A NATION FROM THE GRID TO CHOOSE YOUR SQUAD" : "CLICK A NATION FROM THE GRID TO CHOOSE YOUR SQUAD";
         const titleShadow = add([
-            text("SELECT YOUR TEAM", { size: 52, font: "bebas" }),
-            pos(center().x + 3, height() * 0.14 + 3),
+            text("SELECT YOUR TEAM", { size: COMPACT ? 44 : 52, font: "bebas" }),
+            pos(center().x + 3, height() * TITLE_Y + 3),
             anchor("center"),
             color(0, 0, 0),
             opacity(0.9)
         ]);
         const titleFace = add([
-            text("SELECT YOUR TEAM", { size: 52, font: "bebas" }),
-            pos(center().x, height() * 0.14),
+            text("SELECT YOUR TEAM", { size: COMPACT ? 44 : 52, font: "bebas" }),
+            pos(center().x, height() * TITLE_Y),
             anchor("center"),
             color(255, 228, 160),
             outline(3, rgb(15, 15, 15)),
@@ -34,15 +43,15 @@ export default function loadStartScene() {
         ]);
 
         const subShadow = add([
-            text("CLICK A NATION FROM THE GRID TO CHOOSE YOUR SQUAD", { size: 16, font: "bebas", letterSpacing: 2 }),
-            pos(center().x + 2, height() * 0.20 + 2),
+            text(SUB_TEXT, { size: 16, font: "bebas", letterSpacing: 2 }),
+            pos(center().x + 2, height() * SUB_Y + 2),
             anchor("center"),
             color(0, 0, 0),
             opacity(0.85)
         ]);
         const subFace = add([
-            text("CLICK A NATION FROM THE GRID TO CHOOSE YOUR SQUAD", { size: 16, font: "bebas", letterSpacing: 2 }),
-            pos(center().x, height() * 0.20),
+            text(SUB_TEXT, { size: 16, font: "bebas", letterSpacing: 2 }),
+            pos(center().x, height() * SUB_Y),
             anchor("center"),
             color(230, 240, 245),
             outline(2, rgb(15, 15, 15)),
@@ -54,11 +63,13 @@ export default function loadStartScene() {
         riseIn(subShadow, 0.14);
         riseIn(subFace, 0.14);
 
-        const previewX = width() * 0.73;
-        const previewY = height() * 0.48;
+        const PREVIEW_W = COMPACT ? 220 : 280;
+        const GRID_LEFT = COMPACT ? 22 : width() * 0.07;
+        const previewX = COMPACT ? width() - 22 - PREVIEW_W / 2 : width() * 0.73;
+        const previewY = COMPACT ? height() * 0.47 : height() * 0.48;
 
         const previewPanel = add([
-            rect(280, 280, { radius: 8 }),
+            rect(PREVIEW_W, COMPACT ? 270 : 280, { radius: 8 }),
             pos(previewX, previewY),
             anchor("center"),
             color(8, 12, 10),
@@ -79,7 +90,7 @@ export default function loadStartScene() {
             sprite("trophy"),
             pos(previewX, previewY - 20),
             anchor("center"),
-            scale(1.3),
+            scale(COMPACT ? 1.1 : 1.3),
             opacity(0.25),
             z(2),
             fixed()
@@ -87,7 +98,7 @@ export default function loadStartScene() {
 
         const teamLabel = add([
             text("SELECT A TEAM", { size: 20, font: "bebas" }),
-            pos(previewX, previewY + 100),
+            pos(previewX, previewY + (COMPACT ? 92 : 100)),
             anchor("center"),
             color(180, 190, 185),
             outline(1, rgb(12, 12, 12)),
@@ -96,12 +107,14 @@ export default function loadStartScene() {
         ]);
 
         const displayName = (name) => name.replace(/_/g, " ").replace(/&/g, " & ").toUpperCase();
-        const gridStart = vec2(width() * 0.07, height() * 0.27);
-        const cols = 5;
-        const cellW = 122;
-        const cellH = 42;
-        const xGap = 128;
-        const yGap = 52;
+        const cols = COMPACT ? 7 : 5;
+        // Compact: spread 7 columns across whatever room is left of the preview column.
+        const gridRoom = COMPACT ? (previewX - PREVIEW_W / 2 - 18) - GRID_LEFT : 0;
+        const xGap = COMPACT ? gridRoom / cols : 128;
+        const cellW = COMPACT ? xGap - 6 : 122;
+        const cellH = COMPACT ? 44 : 42;
+        const yGap = COMPACT ? 51 : 52;
+        const gridStart = vec2(GRID_LEFT, height() * (COMPACT ? 0.215 : 0.27));
         const countryButtons = [];
 
         const selectionBorder = add([
@@ -161,18 +174,22 @@ export default function loadStartScene() {
 
             const flagIcon = add([
                 sprite(country),
-                pos(x + 15, y + cellH / 2),
+                pos(x + (COMPACT ? 17 : 15), y + cellH / 2),
                 anchor("center"),
-                scale(0.42),
+                scale(COMPACT ? 0.5 : 0.42),
                 fixed(),
                 z(2)
             ]);
 
             const cellLabelText = displayName(country);
-            const cellLabelSize = cellLabelText.length > 17 ? 7 : cellLabelText.length > 12 ? 8.5 : 10;
+            // Compact cells are narrower, so long names ("BOSNIA & HERZEGOVINA") shrink further.
+            // Compact: fit the name to the cell width (the stage is narrower on tablets).
+            const cellLabelSize = COMPACT
+                ? Math.max(8, Math.min(13, (cellW - 40) / (cellLabelText.length * 0.6)))
+                : (cellLabelText.length > 17 ? 7 : cellLabelText.length > 12 ? 8.5 : 10);
             const label = add([
-                text(cellLabelText, { size: cellLabelSize, font: "bebas" }),
-                pos(x + 30, y + cellH / 2),
+                text(cellLabelText, { size: cellLabelSize, font: "bebas", noFloor: true }),
+                pos(x + (COMPACT ? 34 : 30), y + cellH / 2),
                 anchor("left"),
                 color(240, 240, 240),
                 opacity(1),
@@ -201,8 +218,8 @@ export default function loadStartScene() {
         let startBtnTween = null;
         let confirmHovering = false;
         const confirmBtn = add([
-            rect(240, 52, { radius: 4 }),
-            pos(previewX, height() * 0.80),
+            rect(COMPACT ? 200 : 240, COMPACT ? 48 : 52, { radius: 4 }),
+            pos(previewX, COMPACT ? height() * 0.84 : height() * 0.80),
             anchor("center"),
             scale(1),
             opacity(1),
@@ -272,7 +289,7 @@ export default function loadStartScene() {
         // opened it by mistake, or want to re-enter their manager name) without being
         // forced through a full match first. Sits above the grid (which can run up to 10
         // rows deep) rather than below it, so it never overlaps a country cell.
-        const backBtn = add([rect(110, 34, { radius: 4 }), pos(76, height() * 0.045), anchor("center"), color(10, 16, 14), outline(1.5, rgb(0, 255, 150)), area(), fixed(), z(3)]);
+        const backBtn = add([rect(110, 34, { radius: 4 }), pos(76, COMPACT ? 26 : height() * 0.045), anchor("center"), color(10, 16, 14), outline(1.5, rgb(0, 255, 150)), area(), fixed(), z(3)]);
         backBtn.add([text("< BACK", { size: 13, font: "bebas" }), anchor("center"), color(255, 255, 255)]);
         riseIn(backBtn, 0.1, 10, 0.3);
         const goBack = () => { play("ui_click", { volume: 0.6 }); go("menu"); };

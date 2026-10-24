@@ -144,8 +144,12 @@ export function confirmLeaveToMenu(onConfirm) {
     overlay.style.justifyContent = "center";
     overlay.style.zIndex = "99999";
     overlay.style.fontFamily = "Arial, sans-serif";
+    overlay.style.overflowY = "auto"; // short landscape phones: scroll instead of clipping
+    overlay.style.boxSizing = "border-box";
+    overlay.style.padding = "8px";
 
     const card = document.createElement("div");
+    card.style.margin = "auto";
     card.style.width = "min(92vw, 360px)";
     card.style.padding = "24px";
     card.style.borderRadius = "14px";

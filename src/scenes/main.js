@@ -7,6 +7,7 @@ import {
     hitStop, screenFlash, spawnTieredKillImpact, crossfadeTo, riseIn, rainbowColor
 } from "../helpers.js";
 import { unlockAchievement } from "../achievements.js";
+import { IS_TOUCH } from "../viewport.js";
 
 export default function loadMainGameScene() {
     scene("main", () => {
@@ -44,6 +45,7 @@ export default function loadMainGameScene() {
         let isDashing = false;
         let shopOpenedOnce = false;
         let shopHintToastShown = false;
+        const SHOP_TIP = IS_TOUCH ? "TIP: TAP SHOP TO OPEN THE STRATEGY SHOP" : "TIP: PRESS [E] TO OPEN THE STRATEGY SHOP";
         let dashCooldown = 0;
         const DASH_MAX_COOLDOWN = BALANCE.dashCooldownMax;
         let shopNotified = false;
@@ -140,29 +142,39 @@ export default function loadMainGameScene() {
 
         const phaseLabelShadow = add([text(getPhaseName(1), { font: "bebas" }), pos(center().x + 3, center().y + 3), scale(2), color(15, 15, 15), opacity(0.65), anchor("center"), fixed(), z(99)]);
         const phaseLabel = add([text(getPhaseName(1), { font: "bebas" }), pos(center()), scale(2), color(255, 255, 255), outline(2, rgb(10, 10, 10)), anchor("center"), fixed(), z(100)]);
+        // Desktop only: the "[E] STRATEGY SHOP" pill in the top-right corner. Touch screens
+        // have a real SHOP button (and it glows by itself when an upgrade is affordable), so
+        // the keyboard hint is not drawn there.
         // Outer halo sits behind the box itself and is how the "upgrades available"
         // glow reads at a glance - the box outline pulses too, but the halo is what
         // catches peripheral vision while the player is focused on the pitch.
-        const shopHintGlow = add([
-            rect(196 + 16, 36 + 16, { radius: 10 }), pos(width() - 8, 8), anchor("topright"),
-            color(255, 215, 0), opacity(0), fixed(), z(97)
-        ]);
-        const shopHintBg = add([
-            rect(196, 36, { radius: 6 }), pos(width() - 16, 16), anchor("topright"),
-            color(0, 40, 55), opacity(0.5), outline(1.5, rgb(0, 190, 255)), fixed(), z(98)
-        ]);
-        const shopHintShadow = add([text("[E] STRATEGY SHOP", { size: 16, font: "bebas" }), pos(width() - 26, 34), anchor("right"), color(10, 10, 10), opacity(0.65), fixed(), z(99)]);
-        const shopHintFace = add([text("[E] STRATEGY SHOP", { size: 16, font: "bebas" }), pos(width() - 24, 34), anchor("right"), color(0, 225, 255), outline(1, rgb(10, 20, 25)), fixed(), z(100)]);
+        let shopHintGlow = null, shopHintBg = null, shopHintFace = null;
+        if (!IS_TOUCH) {
+            shopHintGlow = add([
+                rect(196 + 16, 36 + 16, { radius: 10 }), pos(width() - 8, 8), anchor("topright"),
+                color(255, 215, 0), opacity(0), fixed(), z(97)
+            ]);
+            shopHintBg = add([
+                rect(196, 36, { radius: 6 }), pos(width() - 16, 16), anchor("topright"),
+                color(0, 40, 55), opacity(0.5), outline(1.5, rgb(0, 190, 255)), fixed(), z(98)
+            ]);
+            add([text("[E] STRATEGY SHOP", { size: 16, font: "bebas" }), pos(width() - 26, 34), anchor("right"), color(10, 10, 10), opacity(0.65), fixed(), z(99)]);
+            shopHintFace = add([text("[E] STRATEGY SHOP", { size: 16, font: "bebas" }), pos(width() - 24, 34), anchor("right"), color(0, 225, 255), outline(1, rgb(10, 20, 25)), fixed(), z(100)]);
+        }
 
         // Small reminder line that only appears once an upgrade is actually affordable -
-        // sits just under the box so it doesn't compete with it for attention.
-        const shopReminderShadow = add([text("", { size: 12, font: "teko" }), pos(width() - 15, 61), anchor("right"), color(10, 10, 10), opacity(0), fixed(), z(99)]);
-        const shopReminderFace = add([text("", { size: 12, font: "teko" }), pos(width() - 16, 60), anchor("right"), color(255, 215, 0), opacity(0), fixed(), z(100)]);
+        // sits just under the box (desktop) or in the top-right corner (touch, left of the
+        // pause button) so it doesn't compete with anything for attention.
+        const reminderX = IS_TOUCH ? width() - 84 : width() - 16;
+        const reminderY = IS_TOUCH ? 24 : 60;
+        const shopReminderShadow = add([text("", { size: 12, font: "teko" }), pos(reminderX + 1, reminderY + 1), anchor("right"), color(10, 10, 10), opacity(0), fixed(), z(99)]);
+        const shopReminderFace = add([text("", { size: 12, font: "teko" }), pos(reminderX, reminderY), anchor("right"), color(255, 215, 0), opacity(0), fixed(), z(100)]);
 
         // Fit the box (and its halo) snugly around the text instead of a hardcoded
         // width, so the pill never clips or floats around the label.
         const SHOP_HINT_PAD_X = 26;
         const fitShopHintBox = () => {
+            if (!shopHintBg) return;
             const w = shopHintFace.width + SHOP_HINT_PAD_X;
             shopHintBg.width = w;
             shopHintGlow.width = w + 16;
@@ -187,17 +199,19 @@ export default function loadMainGameScene() {
             return { normalAffordable, endgameAffordable };
         }
 
-        shopHintBg.onUpdate(() => {
+        const updateShopHint = () => {
             const pulse = wave(0.35, 1, time() * 2.2);
             const { normalAffordable, endgameAffordable } = getShopAvailability();
 
             if (endgameAffordable) {
                 // RGB / rainbow pulse - endgame tactics are the highest-value thing in the shop.
                 const glowColor = rainbowColor(time() * 3);
-                shopHintBg.outline.color = glowColor;
-                shopHintBg.opacity = 0.4 + pulse * 0.45;
-                shopHintGlow.color = glowColor;
-                shopHintGlow.opacity = 0.18 + pulse * 0.3;
+                if (shopHintBg) {
+                    shopHintBg.outline.color = glowColor;
+                    shopHintBg.opacity = 0.4 + pulse * 0.45;
+                    shopHintGlow.color = glowColor;
+                    shopHintGlow.opacity = 0.18 + pulse * 0.3;
+                }
                 shopReminderFace.text = "ENDGAME TIERS AVAILABLE IN SHOP!";
                 shopReminderFace.color = glowColor;
                 shopReminderFace.opacity = 1;
@@ -205,23 +219,28 @@ export default function loadMainGameScene() {
                 shopReminderShadow.opacity = 0.6;
             } else if (normalAffordable) {
                 // Golden pulse - a normal stat upgrade is affordable.
-                shopHintBg.outline.color = rgb(255, 195 + pulse * 20, 0);
-                shopHintBg.opacity = 0.38 + pulse * 0.42;
-                shopHintGlow.color = rgb(255, 205, 0);
-                shopHintGlow.opacity = 0.14 + pulse * 0.24;
+                if (shopHintBg) {
+                    shopHintBg.outline.color = rgb(255, 195 + pulse * 20, 0);
+                    shopHintBg.opacity = 0.38 + pulse * 0.42;
+                    shopHintGlow.color = rgb(255, 205, 0);
+                    shopHintGlow.opacity = 0.14 + pulse * 0.24;
+                }
                 shopReminderFace.text = "NEW UPGRADES AVAILABLE IN SHOP";
                 shopReminderFace.color = rgb(255, 215, 0);
                 shopReminderFace.opacity = 1;
                 shopReminderShadow.text = shopReminderFace.text;
                 shopReminderShadow.opacity = 0.6;
             } else {
-                shopHintBg.opacity = 0.32 + pulse * 0.38;
-                shopHintBg.outline.color = rgb(0, 160 + pulse * 90, 255);
-                shopHintGlow.opacity = 0;
+                if (shopHintBg) {
+                    shopHintBg.opacity = 0.32 + pulse * 0.38;
+                    shopHintBg.outline.color = rgb(0, 160 + pulse * 90, 255);
+                    shopHintGlow.opacity = 0;
+                }
                 shopReminderFace.opacity = 0;
                 shopReminderShadow.opacity = 0;
             }
-        });
+        };
+        onUpdate(updateShopHint);
 
         // Kill-streak readout. Purely a "feel" layer - it does not change score or the
         // shop economy, it just makes chaining kills quickly read as satisfying.
@@ -276,7 +295,7 @@ export default function loadMainGameScene() {
             if (session.run.score >= 40 && !shopNotified) {
                 shopNotified = true;
                 add([
-                    text("UPGRADES READY!\nPRESS [E] NOW!", { size: 42, font: "bebas", align: "center" }),
+                    text(IS_TOUCH ? "UPGRADES READY!\nTAP SHOP NOW!" : "UPGRADES READY!\nPRESS [E] NOW!", { size: 42, font: "bebas", align: "center" }),
                     pos(center().x, center().y - 120),
                     anchor("center"),
                     color(0, 255, 150),
@@ -289,24 +308,30 @@ export default function loadMainGameScene() {
             }
         });
 
-        const slotY = height() - 52;
-        const slotSize = 56;
-        const bikeSlotX = center().x + 72;
-        const dashSlotX = center().x - 72;
+        // Desktop only: skill icons (dash / bicycle kick) with their key labels and cooldown
+        // counters. On touch screens the DASH / KICK buttons are the skill icons and show their
+        // own cooldown (mobile_controls.js), so none of this is drawn there.
+        let dashIconOverlay = null, dashCooldownCounter = null, bicycleIconOverlay = null, bicycleCooldownCounter = null;
+        if (!IS_TOUCH) {
+            const slotY = height() - 52;
+            const slotSize = 56;
+            const bikeSlotX = center().x + 72;
+            const dashSlotX = center().x - 72;
 
-        add([circle(slotSize / 2), pos(bikeSlotX, slotY), anchor("center"), color(20, 25, 22), outline(2, rgb(255, 215, 0)), fixed(), z(150)]);
-        add([sprite("bicycle_kick"), pos(bikeSlotX, slotY), scale(0.16), anchor("center"), fixed(), z(151)]);
-        const bicycleIconOverlay = add([circle(slotSize / 2 - 1), pos(bikeSlotX, slotY), anchor("center"), color(10, 15, 12), opacity(0), fixed(), z(152)]);
-        const bicycleCooldownCounter = add([text("", { size: 22, font: "bebas" }), pos(bikeSlotX, slotY), anchor("center"), color(255, 255, 255), outline(2, rgb(0, 0, 0)), fixed(), z(153)]);
-        add([rect(42, 14, { radius: 3 }), pos(bikeSlotX, slotY - 34), anchor("center"), color(0, 0, 0), outline(1, rgb(255, 255, 255)), fixed(), z(154)]);
-        add([text("SPACE", { size: 9, font: "bebas" }), pos(bikeSlotX, slotY - 34), anchor("center"), color(255, 255, 255), fixed(), z(155)]);
+            add([circle(slotSize / 2), pos(bikeSlotX, slotY), anchor("center"), color(20, 25, 22), outline(2, rgb(255, 215, 0)), fixed(), z(150)]);
+            add([sprite("bicycle_kick"), pos(bikeSlotX, slotY), scale(0.16), anchor("center"), fixed(), z(151)]);
+            bicycleIconOverlay = add([circle(slotSize / 2 - 1), pos(bikeSlotX, slotY), anchor("center"), color(10, 15, 12), opacity(0), fixed(), z(152)]);
+            bicycleCooldownCounter = add([text("", { size: 22, font: "bebas" }), pos(bikeSlotX, slotY), anchor("center"), color(255, 255, 255), outline(2, rgb(0, 0, 0)), fixed(), z(153)]);
+            add([rect(42, 14, { radius: 3 }), pos(bikeSlotX, slotY - 34), anchor("center"), color(0, 0, 0), outline(1, rgb(255, 255, 255)), fixed(), z(154)]);
+            add([text("SPACE", { size: 9, font: "bebas" }), pos(bikeSlotX, slotY - 34), anchor("center"), color(255, 255, 255), fixed(), z(155)]);
 
-        add([circle(30), pos(dashSlotX, slotY), anchor("center"), color(20, 25, 22), outline(2, rgb(0, 215, 255)), fixed(), z(150)]);
-        add([sprite("slide_icon"), pos(dashSlotX, slotY), scale(0.10), anchor("center"), fixed(), z(151)]);
-        const dashIconOverlay = add([circle(29), pos(dashSlotX, slotY), anchor("center"), color(10, 15, 12), opacity(0), fixed(), z(152)]);
-        const dashCooldownCounter = add([text("", { size: 22, font: "bebas" }), pos(dashSlotX, slotY), anchor("center"), color(255, 255, 255), outline(2, rgb(0, 0, 0)), fixed(), z(153)]);
-        add([rect(40, 14, { radius: 3 }), pos(dashSlotX, slotY - 34), anchor("center"), color(0, 0, 0), outline(1, rgb(255, 255, 255)), fixed(), z(154)]);
-        add([text("SHIFT", { size: 9, font: "bebas" }), pos(dashSlotX, slotY - 34), anchor("center"), color(255, 255, 255), fixed(), z(155)]);
+            add([circle(30), pos(dashSlotX, slotY), anchor("center"), color(20, 25, 22), outline(2, rgb(0, 215, 255)), fixed(), z(150)]);
+            add([sprite("slide_icon"), pos(dashSlotX, slotY), scale(0.10), anchor("center"), fixed(), z(151)]);
+            dashIconOverlay = add([circle(29), pos(dashSlotX, slotY), anchor("center"), color(10, 15, 12), opacity(0), fixed(), z(152)]);
+            dashCooldownCounter = add([text("", { size: 22, font: "bebas" }), pos(dashSlotX, slotY), anchor("center"), color(255, 255, 255), outline(2, rgb(0, 0, 0)), fixed(), z(153)]);
+            add([rect(40, 14, { radius: 3 }), pos(dashSlotX, slotY - 34), anchor("center"), color(0, 0, 0), outline(1, rgb(255, 255, 255)), fixed(), z(154)]);
+            add([text("SHIFT", { size: 9, font: "bebas" }), pos(dashSlotX, slotY - 34), anchor("center"), color(255, 255, 255), fixed(), z(155)]);
+        }
 
         // ==========================================
         // MOVEMENT + SMOOTH CAMERA FOLLOW
@@ -381,21 +406,29 @@ export default function loadMainGameScene() {
         onUpdate(() => {
             if (dashCooldown > 0) {
                 dashCooldown -= dt();
-                dashIconOverlay.opacity = 0.75;
-                dashCooldownCounter.text = Math.ceil(dashCooldown);
+                if (dashIconOverlay) {
+                    dashIconOverlay.opacity = 0.75;
+                    dashCooldownCounter.text = Math.ceil(dashCooldown);
+                }
             } else {
                 dashCooldown = 0;
-                dashIconOverlay.opacity = 0;
-                dashCooldownCounter.text = "";
+                if (dashIconOverlay) {
+                    dashIconOverlay.opacity = 0;
+                    dashCooldownCounter.text = "";
+                }
             }
             if (session.run.bicycleCooldown > 0) {
                 session.run.bicycleCooldown -= dt();
-                bicycleIconOverlay.opacity = 0.75;
-                bicycleCooldownCounter.text = Math.ceil(session.run.bicycleCooldown);
+                if (bicycleIconOverlay) {
+                    bicycleIconOverlay.opacity = 0.75;
+                    bicycleCooldownCounter.text = Math.ceil(session.run.bicycleCooldown);
+                }
             } else {
                 session.run.bicycleCooldown = 0;
-                bicycleIconOverlay.opacity = 0;
-                bicycleCooldownCounter.text = "";
+                if (bicycleIconOverlay) {
+                    bicycleIconOverlay.opacity = 0;
+                    bicycleCooldownCounter.text = "";
+                }
             }
         });
 
@@ -582,17 +615,21 @@ export default function loadMainGameScene() {
             unlockAchievement("shop_smart");
             session.run.isUpgrading = !session.run.isUpgrading;
             if (session.run.isUpgrading) {
-                const backdrop = add([rect(600, 560, { radius: 10 }), pos(center()), anchor("center"), color(14, 18, 16), opacity(0), outline(3, rgb(0, 215, 140)), fixed(), z(200)]);
+                // The shop panel is 560px tall; on a short (touch) stage squeeze its vertical
+                // layout so it always fits with a small margin.
+                const K = Math.min(1, (height() - 24) / 560);
+                const backdrop = add([rect(600, 560 * K, { radius: 10 }), pos(center()), anchor("center"), color(14, 18, 16), opacity(0), outline(3, rgb(0, 215, 140)), fixed(), z(200)]);
                 tween(0, 1, 0.2, (o) => backdrop.opacity = o, easings.easeOutQuad);
-                const titleShadow = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x + 2, center().y - 248), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
-                const title = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x, center().y - 250), anchor("center"), color(255, 215, 0), outline(2, rgb(12, 8, 0)), fixed(), z(201)]);
+                const titleShadow = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x + 2, center().y - 248 * K), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
+                const title = add([text("TEAM STRATEGY ROOM", { size: 30, font: "bebas" }), pos(center().x, center().y - 250 * K), anchor("center"), color(255, 215, 0), outline(2, rgb(12, 8, 0)), fixed(), z(201)]);
                 shopUIComponents.push(backdrop, titleShadow, title);
 
                 shopInputLocked = false;
                 unlockOnRelease = onMouseRelease(() => { shopInputLocked = false; });
 
                 const CARD_WIDTH = 500;
-                const CARD_HEIGHT = 46;
+                const CARD_HEIGHT = IS_TOUCH ? 48 : 46;
+                const BUY_H = IS_TOUCH ? 40 : 32; // bigger tap target on touch screens
                 const PIP_MAX = 5;
 
                 // A leveled upgrade card: icon, name, up to 5 level-pips, and a buy pill.
@@ -618,7 +655,7 @@ export default function loadMainGameScene() {
                         : null;
 
                     const btnColor = session.run.score >= cost ? rgb(0, 180, 120) : rgb(60, 65, 62);
-                    const buyBtn = add([rect(130, 32, { radius: 5 }), pos(center().x + CARD_WIDTH / 2 - 72, center().y + yOffset), color(btnColor), anchor("center"), area(), fixed(), z(202)]);
+                    const buyBtn = add([rect(130, BUY_H, { radius: 5 }), pos(center().x + CARD_WIDTH / 2 - 72, center().y + yOffset), color(btnColor), anchor("center"), area(), fixed(), z(202)]);
                     const buyText = add([text(`$${cost}`, { size: 15, font: "bebas" }), pos(center().x + CARD_WIDTH / 2 - 72, center().y + yOffset), anchor("center"), color(255, 255, 255), outline(1, rgb(10, 10, 10)), fixed(), z(203)]);
 
                     buyBtn.onHover(() => { setCursor("pointer"); buyBtn.scale = vec2(1.05); });
@@ -645,7 +682,7 @@ export default function loadMainGameScene() {
                     const nameLabel = add([text(labelName, { size: 15, font: "bebas" }), pos(center().x - CARD_WIDTH / 2 + 52, center().y + yOffset), anchor("left"), color(235, 235, 235), fixed(), z(202)]);
 
                     const btnColor = isOwned ? rgb(45, 42, 20) : (session.run.score >= cost ? rgb(0, 180, 120) : rgb(60, 65, 62));
-                    const buyBtn = add([rect(130, 32, { radius: 5 }), pos(center().x + CARD_WIDTH / 2 - 72, center().y + yOffset), color(btnColor), anchor("center"), area(), fixed(), z(202)]);
+                    const buyBtn = add([rect(130, BUY_H, { radius: 5 }), pos(center().x + CARD_WIDTH / 2 - 72, center().y + yOffset), color(btnColor), anchor("center"), area(), fixed(), z(202)]);
                     const buyText = add([text(isOwned ? "★ OWNED" : `$${cost}`, { size: 14, font: "bebas" }), pos(center().x + CARD_WIDTH / 2 - 72, center().y + yOffset), anchor("center"), color(isOwned ? rgb(255, 215, 0) : rgb(255, 255, 255)), outline(1, rgb(10, 10, 10)), fixed(), z(203)]);
 
                     if (!isOwned) {
@@ -667,30 +704,43 @@ export default function loadMainGameScene() {
                 };
 
                 const refreshShop = () => {
-                    shopUIComponents.forEach((comp) => { if (comp !== backdrop && comp !== title && comp !== titleShadow) comp.destroy(); });
-                    shopUIComponents = [backdrop, titleShadow, title];
+                    // Cards get rebuilt on every purchase; the title, backdrop and the resume
+                    // hint/button (flagged _keep) must survive that.
+                    shopUIComponents.forEach((comp) => { if (comp !== backdrop && comp !== title && comp !== titleShadow && !comp._keep) comp.destroy(); });
+                    shopUIComponents = shopUIComponents.filter((comp) => comp === backdrop || comp === title || comp === titleShadow || comp._keep);
 
                     let rateCost = (session.upgrades.fireRateLevel + 1) * BALANCE.fireRateCostPerLevel;
                     let speedCost = (session.upgrades.speedLevel + 1) * BALANCE.speedCostPerLevel;
                     let magnetCost = (session.upgrades.magnetLevel + 1) * BALANCE.magnetCostPerLevel;
 
-                    createLeveledCard("⚡", "Striking Speed", session.upgrades.fireRateLevel, rateCost, -190, () => { session.upgrades.fireRateLevel++; session.player.fireRate = Math.max(BALANCE.fireRateFloor, BALANCE.startingFireRate - (session.upgrades.fireRateLevel * BALANCE.fireRateGainPerLevel)); });
-                    createLeveledCard("👟", "Running Speed", session.upgrades.speedLevel, speedCost, -135, () => { session.upgrades.speedLevel++; session.player.speed = BALANCE.startingPlayerSpeed + (session.upgrades.speedLevel * BALANCE.speedGainPerLevel); });
-                    createLeveledCard("🧲", "Ball Magnet", session.upgrades.magnetLevel, magnetCost, -80, () => { session.upgrades.magnetLevel++; session.player.magnetRadius = BALANCE.startingMagnetRadius + (session.upgrades.magnetLevel * BALANCE.magnetGainPerLevel); });
+                    createLeveledCard("⚡", "Striking Speed", session.upgrades.fireRateLevel, rateCost, -190 * K, () => { session.upgrades.fireRateLevel++; session.player.fireRate = Math.max(BALANCE.fireRateFloor, BALANCE.startingFireRate - (session.upgrades.fireRateLevel * BALANCE.fireRateGainPerLevel)); });
+                    createLeveledCard("👟", "Running Speed", session.upgrades.speedLevel, speedCost, -135 * K, () => { session.upgrades.speedLevel++; session.player.speed = BALANCE.startingPlayerSpeed + (session.upgrades.speedLevel * BALANCE.speedGainPerLevel); });
+                    createLeveledCard("🧲", "Ball Magnet", session.upgrades.magnetLevel, magnetCost, -80 * K, () => { session.upgrades.magnetLevel++; session.player.magnetRadius = BALANCE.startingMagnetRadius + (session.upgrades.magnetLevel * BALANCE.magnetGainPerLevel); });
 
-                    const separator = add([text("— ENDGAME TALENT TIER —", { size: 13, font: "bebas" }), pos(center().x, center().y - 30), anchor("center"), color(255, 215, 0), outline(1, rgb(12, 10, 5)), fixed(), z(201)]);
+                    const separator = add([text("— ENDGAME TALENT TIER —", { size: 13, font: "bebas" }), pos(center().x, center().y - 30 * K), anchor("center"), color(255, 215, 0), outline(1, rgb(12, 10, 5)), fixed(), z(201)]);
                     shopUIComponents.push(separator);
 
-                    createTacticCard("🔫", "Shotgun Tactic (3-Way)", BALANCE.shotgunCost, 20, session.upgrades.hasShotgun, () => { session.upgrades.hasShotgun = true; });
-                    createTacticCard("🛡️", "Energy Shield (1 Hit)", BALANCE.shieldCost, 75, session.upgrades.hasShield, () => { session.upgrades.hasShield = true; session.upgrades.shieldActive = true; });
-                    createTacticCard("🎯", "Piercing Ball (Drill)", BALANCE.piercingCost, 130, session.upgrades.hasPiercing, () => { session.upgrades.hasPiercing = true; });
+                    createTacticCard("🔫", "Shotgun Tactic (3-Way)", BALANCE.shotgunCost, 20 * K, session.upgrades.hasShotgun, () => { session.upgrades.hasShotgun = true; });
+                    createTacticCard("🛡️", "Energy Shield (1 Hit)", BALANCE.shieldCost, 75 * K, session.upgrades.hasShield, () => { session.upgrades.hasShield = true; session.upgrades.shieldActive = true; });
+                    createTacticCard("🎯", "Piercing Ball (Drill)", BALANCE.piercingCost, 130 * K, session.upgrades.hasPiercing, () => { session.upgrades.hasPiercing = true; });
                 };
 
                 refreshShop();
 
-                const exitShadow = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x + 1.5, center().y + 251.5), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
-                const exitTip = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x, center().y + 250), anchor("center"), color(190, 215, 235), outline(1, rgb(15, 18, 20)), fixed(), z(201)]);
-                shopUIComponents.push(exitShadow, exitTip);
+                if (IS_TOUCH) {
+                    // No [E] key on a phone - give the shop a real RESUME button (the touch
+                    // overlay hides itself while the shop is open).
+                    const resumeBtn = add([rect(220, 40, { radius: 6 }), pos(center().x, center().y + 244 * K), anchor("center"), color(0, 60, 40), outline(2, rgb(0, 255, 150)), area(), fixed(), z(202)]);
+                    const resumeText = add([text("RESUME MATCH", { size: 20, font: "bebas" }), pos(center().x, center().y + 244 * K), anchor("center"), color(255, 255, 255), fixed(), z(203)]);
+                    resumeBtn.onClick(() => { if (session.run.isUpgrading) { play("ui_click", { volume: 0.6 }); toggleShop(); } });
+                    resumeBtn._keep = true; resumeText._keep = true;
+                    shopUIComponents.push(resumeBtn, resumeText);
+                } else {
+                    const exitShadow = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x + 1.5, center().y + 251.5), anchor("center"), color(10, 10, 10), opacity(0.6), fixed(), z(200)]);
+                    const exitTip = add([text("PRESS [E] TO RESUME MATCH", { size: 14, font: "bebas" }), pos(center().x, center().y + 250), anchor("center"), color(190, 215, 235), outline(1, rgb(15, 18, 20)), fixed(), z(201)]);
+                    exitShadow._keep = true; exitTip._keep = true;
+                    shopUIComponents.push(exitShadow, exitTip);
+                }
             } else {
                 shopUIComponents.forEach((comp) => comp.destroy());
                 shopUIComponents = [];
@@ -711,7 +761,15 @@ export default function loadMainGameScene() {
         }
         onKeyPress("escape", togglePause);
 
-        window.gameInput = { dash: triggerDash, bicycleKick: triggerBicycleKick, toggleShop: toggleShop, togglePause: togglePause };
+        window.gameInput = {
+            dash: triggerDash, bicycleKick: triggerBicycleKick, toggleShop: toggleShop, togglePause: togglePause,
+            // Read by the touch-button overlay every frame to draw cooldowns / the glowing SHOP button.
+            getState: () => ({
+                dashCooldown,
+                kickCooldown: session.run.bicycleCooldown,
+                ...getShopAvailability()
+            })
+        };
 
         onCollide("bullet", "enemy", (b, e) => {
             if (e.hp > 1) {
@@ -793,11 +851,11 @@ export default function loadMainGameScene() {
             if (!shopOpenedOnce && !shopHintToastShown && session.run.score >= 10) {
                 shopHintToastShown = true;
                 const toastShadow = add([
-                    text("TIP: PRESS [E] TO OPEN THE STRATEGY SHOP", { size: 20, font: "bebas" }),
+                    text(SHOP_TIP, { size: 20, font: "bebas" }),
                     pos(center().x + 2, height() * 0.16 + 2), anchor("center"), color(0, 0, 0), opacity(0), fixed(), z(150)
                 ]);
                 const toastFace = add([
-                    text("TIP: PRESS [E] TO OPEN THE STRATEGY SHOP", { size: 20, font: "bebas" }),
+                    text(SHOP_TIP, { size: 20, font: "bebas" }),
                     pos(center().x, height() * 0.16), anchor("center"), color(0, 225, 255), outline(2, rgb(5, 10, 12)), opacity(0), scale(1), fixed(), z(151)
                 ]);
                 riseIn(toastShadow, 0, 10, 0.3);

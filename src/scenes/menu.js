@@ -139,10 +139,15 @@ export default function loadMenuScene() {
             overlay.style.justifyContent = "center";
             overlay.style.zIndex = "99999";
             overlay.style.fontFamily = "Arial, sans-serif";
+            overlay.style.overflowY = "auto"; // keyboard open on a short phone screen: scroll, don't clip
+            overlay.style.boxSizing = "border-box";
+            overlay.style.padding = "8px";
 
             const card = document.createElement("div");
+            card.style.margin = "auto";
             card.style.width = "min(92vw, 360px)";
-            card.style.padding = "24px";
+            card.style.boxSizing = "border-box";
+            card.style.padding = "20px";
             card.style.borderRadius = "14px";
             card.style.background = "linear-gradient(135deg, #0d1713, #1d2d24)";
             card.style.border = "2px solid #00ff96";
@@ -184,7 +189,7 @@ export default function loadMenuScene() {
 
             const backBtn = document.createElement("button");
             backBtn.textContent = "< BACK";
-            backBtn.style.padding = "10px 16px";
+            backBtn.style.padding = "12px 18px";
             backBtn.style.borderRadius = "8px";
             backBtn.style.border = "1px solid #6ad4a7";
             backBtn.style.background = "transparent";
@@ -194,7 +199,7 @@ export default function loadMenuScene() {
 
             const confirmBtn = document.createElement("button");
             confirmBtn.textContent = "START MATCH";
-            confirmBtn.style.padding = "10px 16px";
+            confirmBtn.style.padding = "12px 18px";
             confirmBtn.style.border = "none";
             confirmBtn.style.borderRadius = "8px";
             confirmBtn.style.background = "#00ff96";

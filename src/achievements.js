@@ -14,6 +14,7 @@
 // full_squad); the rest span team selection through to the post-match leaderboard.
 import { session } from "./config.js";
 import { rainbowColor } from "./helpers.js";
+import { IS_TOUCH } from "./viewport.js";
 
 export const ACHIEVEMENTS = {
     star_struck: {
@@ -110,11 +111,12 @@ export function unlockAchievement(id) {
 // along with everything else in that scene (normal Kaboom behaviour) - a rare enough
 // edge case (an achievement firing in the last half-second before a scene transition)
 // that it isn't worth extra plumbing to guard against.
-const TOAST_W = 300;
+const TOAST_W = IS_TOUCH ? 340 : 300;
 const TOAST_H = 84;
 const TOAST_GAP = 10;
 const TOAST_TOP = 16;
-const TOAST_MARGIN_RIGHT = 16;
+// On touch screens the pause button lives in the top-right corner, so toasts sit to its left.
+const TOAST_MARGIN_RIGHT = IS_TOUCH ? 78 : 16;
 const HOLD_TIME = 2.6;
 const SLIDE_TIME = 0.4;
 
@@ -180,7 +182,7 @@ function spawnToast(id) {
 
     const textX = 84;
     const titleTxt = panel.add([
-        text(def.rare ? "RARE ACHIEVEMENT UNLOCKED!!!" : "ACHIEVEMENT UNLOCKED!", { size: 11, font: "bebas", letterSpacing: 1 }),
+        text(def.rare ? "RARE ACHIEVEMENT UNLOCKED!!!" : "ACHIEVEMENT UNLOCKED!", { size: IS_TOUCH ? 13 : 11, font: "bebas", letterSpacing: 1, noFloor: true }),
         pos(textX, 11),
         anchor("topleft"),
         color(255, 215, 0),
@@ -197,7 +199,7 @@ function spawnToast(id) {
         z(2)
     ]);
     panel.add([
-        text(def.phrase, { size: 11, font: "teko", width: TOAST_W - textX - 14 }),
+        text(def.phrase, { size: IS_TOUCH ? 14 : 11, font: "teko", width: TOAST_W - textX - 14, noFloor: true }),
         pos(textX, 53),
         anchor("topleft"),
         color(205, 215, 210),

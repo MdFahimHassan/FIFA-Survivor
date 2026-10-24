@@ -1,4 +1,5 @@
 import { fadeInScene, riseIn } from "../helpers.js";
+import { IS_TOUCH } from "../viewport.js";
 
 export default function loadCreditsScene() {
     scene("credits", () => {
@@ -15,13 +16,13 @@ export default function loadCreditsScene() {
             }
         });
 
-        const titleShadow = add([text("CREDITS", { size: 44, font: "bebas" }), pos(center().x + 3, height() * 0.14 + 3), anchor("center"), color(0, 0, 0), opacity(0.7)]);
-        const titleFace = add([text("CREDITS", { size: 44, font: "bebas" }), pos(center().x, height() * 0.14), anchor("center"), color(255, 228, 160), outline(3, rgb(15, 15, 15))]);
+        const titleShadow = add([text("CREDITS", { size: 44, font: "bebas" }), pos(center().x + 3, height() * (IS_TOUCH ? 0.09 : 0.14) + 3), anchor("center"), color(0, 0, 0), opacity(0.7)]);
+        const titleFace = add([text("CREDITS", { size: 44, font: "bebas" }), pos(center().x, height() * (IS_TOUCH ? 0.09 : 0.14)), anchor("center"), color(255, 228, 160), outline(3, rgb(15, 15, 15))]);
         riseIn(titleShadow, 0.03);
         riseIn(titleFace, 0.03);
 
         const panel = add([
-            rect(560, 380, { radius: 10 }), pos(center().x, height() * 0.55), anchor("center"),
+            rect(IS_TOUCH ? 640 : 560, IS_TOUCH ? 372 : 380, { radius: 10 }), pos(center().x, height() * (IS_TOUCH ? 0.53 : 0.55)), anchor("center"),
             color(10, 16, 14), opacity(0.9), outline(2, rgb(0, 200, 140))
         ]);
         riseIn(panel, 0.12, 16, 0.35);
@@ -40,7 +41,9 @@ export default function loadCreditsScene() {
             { text: "Thanks for playing.", size: 15, font: "bebas", color: rgb(255, 255, 255), gap: 0 }
         ];
 
-        let yCursor = height() * 0.55 - 155;
+        // Compact (touch) text is floored at 16px, so each line gets a little more room.
+        if (IS_TOUCH) lines.forEach((l) => { l.gap = l.text ? Math.max(l.gap, l.gap < 20 ? 22 : l.gap) : l.gap; });
+        let yCursor = height() * (IS_TOUCH ? 0.53 : 0.55) - (IS_TOUCH ? 160 : 155);
         lines.forEach((line, idx) => {
             if (line.text) {
                 const entry = add([
@@ -52,7 +55,7 @@ export default function loadCreditsScene() {
             yCursor += line.gap;
         });
 
-        const backBtn = add([rect(160, 42, { radius: 4 }), pos(center().x, height() * 0.92), anchor("center"), color(10, 16, 14), outline(1.5, rgb(0, 255, 150)), area()]);
+        const backBtn = add([rect(160, 42, { radius: 4 }), pos(center().x, height() * (IS_TOUCH ? 0.93 : 0.92)), anchor("center"), color(10, 16, 14), outline(1.5, rgb(0, 255, 150)), area()]);
         backBtn.add([text("< BACK", { size: 16, font: "bebas" }), anchor("center"), color(255, 255, 255)]);
         backBtn.onClick(() => { play("ui_click", { volume: 0.6 }); go("menu"); });
         backBtn.onHover(() => { setCursor("pointer"); backBtn.outline.color = rgb(255, 215, 0); });

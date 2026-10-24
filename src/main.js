@@ -6,6 +6,9 @@ import { loadSavedProfile, session } from "./config.js";
 import { loadCriticalAssets } from "./assets.js";
 import { initMobileControls } from "./mobile_controls.js";
 import { initPauseMenu } from "./pause_menu.js";
+import { IS_TOUCH, getStageSize, initViewport } from "./viewport.js";
+
+const MIN_TEXT_SIZE = 16;
 
 // Scene Modules
 import loadInteractionGateScene from "./scenes/interaction_gate.js";
@@ -20,11 +23,32 @@ import loadSettingsScene from "./scenes/settings.js";
 import loadCreditsScene from "./scenes/credits.js";
 
 // 1. Initialize Kaboom Canvas Sandbox
-kaboom({
+// Desktop: canvas fills the window (unchanged). Phones/tablets: fixed-size letterboxed
+// stage that the browser scales to fit (see src/viewport.js).
+const kaboomOpts = {
     background: [10, 14, 12],
     clearColor: [0, 0, 0, 1],
-    loadingScreen: false 
-});
+    loadingScreen: false
+};
+if (IS_TOUCH) {
+    const stage = getStageSize();
+    kaboomOpts.width = stage.w;
+    kaboomOpts.height = stage.h;
+    kaboomOpts.letterbox = true;
+}
+kaboom(kaboomOpts);
+
+// On touch screens the stage is scaled down to fit (~0.7x on a phone), so very small text
+// would end up unreadable. Every text() call funnels through here so nothing renders below a
+// readable size; pass { noFloor: true } for the rare label that must stay small.
+if (IS_TOUCH) {
+    const _kaboomText = text;
+    window.text = (str, opts = {}) => {
+        const { noFloor, ...rest } = opts || {};
+        if (!noFloor && typeof rest.size === "number") rest.size = Math.max(rest.size, MIN_TEXT_SIZE);
+        return _kaboomText(str, rest);
+    };
+}
 
 document.title = "FIFA Survivor";
 
@@ -65,6 +89,7 @@ loadSettingsScene();
 loadCreditsScene();
 
 // 4. Mount DOM overlays that live above every scene (mobile touch controls, mute toggle)
+initViewport();
 initMobileControls();
 initPauseMenu();
 
