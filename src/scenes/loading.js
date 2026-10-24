@@ -1,8 +1,26 @@
+import { deferredBatches } from "../assets.js";
+import { preloadFirebase } from "../config.js";
+
 export default function loadLoadingScene() {
     scene("loading", () => {
         window.gameInputActive = false;
         debug.paused = false;
-        const LOADING_TIME = 2.5;
+        // Everything (critical + the rest) now loads HERE, behind the loading bar, instead
+        // of in the background on the menu - background texture/audio decoding while the menu
+        // was animating is what made it stutter. The bar tracks the real download
+        // (loadProgress()) but never finishes before this minimum, so the screen doesn't flash by.
+        // Raise/lower this number to taste.
+        const MIN_LOADING_TIME = 2.8;
+        // Start the remaining asset batches one at a time, spread across the first ~1.2s,
+        // instead of all in one frame (that burst of decoding is what caused the stutter).
+        const BATCH_GAP = 0.25;
+        let batchesStarted = 0;
+        deferredBatches.forEach((startBatch, i) => {
+            wait(0.1 + i * BATCH_GAP, () => { startBatch(); batchesStarted++; });
+        });
+        // Firebase's SDK is parsed on the main thread too, so it goes after the asset batches.
+        wait(0.1 + deferredBatches.length * BATCH_GAP + 0.3, preloadFirebase);
+        let elapsed = 0;
         let progress = 0;
         const barMaxWidth = 280;
 
@@ -19,7 +37,7 @@ export default function loadLoadingScene() {
 
         const spinningO = add([
             sprite("loading_ball"), pos(baseX - 59, baseY - 28),
-            scale(0.1), rotate(0), anchor("center"), z(10)
+            scale(0.36), rotate(0), anchor("center"), z(10) // loading_ball.png is now 140px wide (was 504px at scale 0.1), so 0.36 keeps the same ~50px on screen
         ]);
 
         add([text("L", { size: 54, font: "bebas" }), pos(baseX - 105, baseY - 50), color(255, 255, 255), outline(2, rgb(10, 10, 10))]);
@@ -48,18 +66,22 @@ export default function loadLoadingScene() {
         wait(0, fitTipBox); // safety re-measure a frame later, in case width isn't final synchronously
         loop(3, () => { tipLabel.text = choose(tips); fitTipBox(); });
 
-        let assetsLoaded = false;
-        onLoad(() => { assetsLoaded = true; });
-
         onUpdate(() => {
             const smoothDt = Math.min(dt(), 0.016);
             spinningO.angle += smoothDt * 160;
-            progress += smoothDt / LOADING_TIME;
-            if (progress > 1) progress = 1;
+            elapsed += dt();
+            // Bar follows real download progress, never moves backwards, and can't hit 100%
+            // before the minimum display time.
+            const allQueued = batchesStarted >= deferredBatches.length;
+            const target = Math.min(allQueued ? loadProgress() : 0.9 * loadProgress(), elapsed / MIN_LOADING_TIME, 1);
+            // Ease the bar toward the target instead of snapping to it: real download
+            // progress arrives in jumps, and a frame-by-frame snap looks like stutter.
+            progress = Math.max(progress, progress + (target - progress) * Math.min(1, dt() * 7));
+            if (allQueued && loadProgress() >= 1 && elapsed >= MIN_LOADING_TIME && progress > 0.985) progress = 1;
 
             progressFill.width = barMaxWidth * progress;
             percentLabel.text = `${Math.floor(progress * 100)}%`;
-            if (progress >= 1 && assetsLoaded) {
+            if (progress >= 1) {
                 go("menu");
             }
         });

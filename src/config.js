@@ -96,8 +96,12 @@ export function loadSavedProfile() {
         if (saved.playerName) session.player.name = saved.playerName;
         if (saved.teamSprite) session.player.teamSprite = saved.teamSprite;
         if (typeof saved.audioMuted === "boolean") session.audio.muted = saved.audioMuted;
-        if (typeof saved.musicVolume === "number") session.audio.musicVolume = saved.musicVolume;
-        if (typeof saved.sfxVolume === "number") session.audio.sfxVolume = saved.sfxVolume;
+        // Clamp + ignore NaN/garbage so a corrupted or hand-edited save can never leave the
+        // game silently stuck at volume 0 / NaN with no obvious cause.
+        const vol = (v) => (typeof v === "number" && Number.isFinite(v)) ? Math.min(1, Math.max(0, v)) : null;
+        const mv = vol(saved.musicVolume), sv = vol(saved.sfxVolume);
+        if (mv !== null) session.audio.musicVolume = mv;
+        if (sv !== null) session.audio.sfxVolume = sv;
     } catch (e) {
         console.warn("Could not read saved profile, starting fresh.", e);
     }
@@ -122,6 +126,9 @@ export function saveAudioSettings() {
 }
 
 // Firebase Configuration Setup
+// (These values are public by design - they identify the project, they are not secrets.
+// What protects the data is firestore.rules + restricting the API key to your domain in
+// Google Cloud Console -> APIs & Services -> Credentials.)
 const firebaseConfig = {
     apiKey: "AIzaSyCyd3jbU1m_Zshl63C1NBHN_AJgLxUCQxs",
     authDomain: "fifa-survivor.firebaseapp.com",
@@ -131,20 +138,41 @@ const firebaseConfig = {
     appId: "1:687618423281:web:444317f725a63726986c50"
 };
 
-// If the Firebase scripts fail to load (CDN hiccup, blocked at a venue's wifi, ad-blocker,
-// fully offline device, etc.) `firebase` may be undefined or initializeApp may throw. That
-// used to be a hard crash at import time - since config.js is imported by nearly every
-// scene, it would take the *entire game* down to a blank screen over a leaderboard problem.
-// Guard it instead: fall back to a null collection, and every function below already treats
-// a failed read/write as non-fatal (see the try/catch + fallback data in each one).
-export let db = null;
-export let scoresCollection = null;
-try {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    scoresCollection = db.collection("leaderboard");
-} catch (e) {
-    console.error("Firebase failed to initialize - playing in offline mode (no leaderboard).", e);
+// Firebase is loaded as a lazily-imported ES module (modular SDK) instead of two blocking
+// <script> tags in <head>. That keeps ~200KB of JS off the critical path - the game boots
+// first, and the SDK is only fetched when something actually touches the leaderboard.
+//
+// If the import fails (CDN hiccup, venue wifi blocks gstatic, ad-blocker, offline) every
+// caller below already treats a failed read/write as non-fatal and falls back, so a
+// leaderboard problem can never take the whole game down.
+const FIREBASE_VERSION = "10.14.1";
+let fbPromise = null;
+function getFirebase() {
+    if (!fbPromise) {
+        fbPromise = (async () => {
+            const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
+            const [{ initializeApp }, fs] = await Promise.all([
+                import(`${base}/firebase-app.js`),
+                import(`${base}/firebase-firestore.js`)
+            ]);
+            const app = initializeApp(firebaseConfig);
+            const db = fs.getFirestore(app);
+            return { fs, db, col: fs.collection(db, "leaderboard") };
+        })().catch((e) => {
+            console.error("Firebase failed to load - playing in offline mode (no leaderboard).", e);
+            fbPromise = null; // allow a later retry
+            throw e;
+        });
+    }
+    return fbPromise;
+}
+
+// Warm the SDK up once the browser is idle (the menu is showing), so the first real
+// leaderboard call - the name prompt's tag lookup - doesn't pay the download cost.
+export function preloadFirebase() {
+    const kick = () => { getFirebase().catch(() => { }); };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 4000 });
+    else setTimeout(kick, 1500);
 }
 
 // Wraps a Firestore call with a hard timeout so a stalled/flaky connection can't leave the
@@ -160,7 +188,9 @@ function withTimeout(promise, ms = 6000) {
 // Unique Tag Generator Engine
 export async function generateUniqueTag(enteredName) {
     try {
-        const snapshot = await withTimeout(scoresCollection.where("name_lowercase", "==", enteredName.toLowerCase()).get());
+        const { fs, col } = await withTimeout(getFirebase(), 8000);
+        const q = fs.query(col, fs.where("name_lowercase", "==", enteredName.toLowerCase()));
+        const snapshot = await withTimeout(fs.getDocs(q));
         let nextNum = snapshot.size + 1;
         return "#" + (nextNum < 10 ? "0" + nextNum : nextNum);
     } catch (e) {
@@ -169,41 +199,14 @@ export async function generateUniqueTag(enteredName) {
     }
 }
 
-// Global Leaderboard Seed Benchmarks
-// NOTE: uses fixed doc IDs + set(merge:true) instead of a where()-then-add() check,
-// since that pattern races when multiple people load the game at the same time
-// (each load sees "not found yet" and adds its own duplicate copy).
-// Writing to a fixed ID makes this safe to run on every page load, from any number of clients at once.
-export async function seedInitialBenchmarks() {
-    const benchmarks = [
-        { id: "seed_fahim_dev", name: "Fahim (Dev)", tag: "#14", name_lowercase: "fahim (dev)", score: 1233 },
-        { id: "seed_raphy", name: "Raphy", tag: "#05", name_lowercase: "raphy", score: 724 },
-        { id: "seed_abir", name: "Abir", tag: "#03", name_lowercase: "abir", score: 425 },
-        { id: "seed_ren", name: "Ren", tag: "#07", name_lowercase: "ren", score: 250 },
-        { id: "seed_sloth", name: "Sloth", tag: "#12", name_lowercase: "sloth", score: 78 }
-    ];
-    try {
-        for (const { id, ...data } of benchmarks) {
-            await withTimeout(scoresCollection.doc(id).set({
-                ...data,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }));
-        }
-    } catch (e) {
-        console.error("Cloud seeding error:", e);
-    }
-}
-
 // Upload Score Engine
 //
 // NOTE ON CHEATING: this is a client-side plausibility check ONLY. Anyone can still open
-// devtools and call this function directly with whatever numbers they want - a determined
-// cheater will always get past client code. The actual fix is server-side: add Firestore
-// Security Rules that validate the write (see firestore.rules in the project root, which
-// you'll need to paste into the Firebase console yourself since it's a backend-only change
-// no local file edit can make for you). This check just stops the most naive case (someone
-// tampering with the score before the normal win/lose flow calls this) from quietly polluting
-// the public leaderboard.
+// devtools and call this function directly with whatever numbers they want. The server-side
+// backstop is firestore.rules (publish it!), which caps the score and locks the document
+// shape; a determined cheater can still submit a fake value under the cap, because a
+// browser game can't prove how it was played. Fully fixing that needs a server (e.g. a
+// Vercel function issuing a signed run token) - see README "Anti-cheat".
 const MAX_PLAUSIBLE_SCORE_PER_SECOND = 12;
 const PLAUSIBILITY_BUFFER = 60; // flat allowance for bursts (magnet pulls, boss loot drops, etc.)
 
@@ -219,52 +222,62 @@ export function isPlausibleScore(score, elapsedSeconds) {
 // row every single match. This is what makes "Try Again" from the win/lose screen safe to
 // spam without flooding the board with duplicate entries for the same person - each retry
 // just re-writes the SAME doc, and only when the new score actually beats their old one.
+// NOTE: firestore.rules validates this exact format on create - keep them in sync.
 function buildPlayerDocId(name, tag) {
-    const slug = (name || "player").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "player";
+    const slug = (name || "player").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24) || "player";
     const tagNum = (tag || "#00").replace("#", "");
     return `player_${slug}_${tagNum}`;
 }
 
 export async function saveScoreToLeaderboard(finalScore, elapsedSeconds = 0) {
-    if (elapsedSeconds > 0 && !isPlausibleScore(finalScore, elapsedSeconds)) {
+    // elapsedSeconds is now REQUIRED to be positive - previously passing 0 skipped the
+    // check entirely.
+    if (!(elapsedSeconds > 0) || !isPlausibleScore(finalScore, elapsedSeconds)) {
         console.warn("Score rejected locally as implausible for match duration; not uploaded.", { finalScore, elapsedSeconds });
         return;
     }
     try {
-        const docRef = scoresCollection.doc(buildPlayerDocId(session.player.name, session.player.tag));
-        const existing = await withTimeout(docRef.get());
-        if (existing.exists && Number(existing.data().score) >= Number(finalScore)) {
+        const { fs, col } = await withTimeout(getFirebase(), 8000);
+        const docRef = fs.doc(col, buildPlayerDocId(session.player.name, session.player.tag));
+        const existing = await withTimeout(fs.getDoc(docRef));
+        if (existing.exists() && Number(existing.data().score) >= Number(finalScore)) {
             return; // this player's existing score already beats (or ties) the new one - leave it
         }
-        await withTimeout(docRef.set({
+        await withTimeout(fs.setDoc(docRef, {
             name: session.player.name,
             tag: session.player.tag,
             name_lowercase: session.player.name.toLowerCase(),
-            score: Number(finalScore),
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            score: Math.floor(Number(finalScore)),
+            timestamp: fs.serverTimestamp()
         }));
     } catch (e) {
         console.error("Failed to upload match record.", e);
     }
 }
 
-// Pull Full Standings To Compute The Player's Own Rank
+// Pull Player Standing
 //
 // Uses "competition ranking" (aka "1224" ranking): a player's rank is 1 + the number of
 // entries strictly ahead of their score, so a tie is shared - e.g. 5 players tied on the
 // same score all sit at rank #7 together (because 6 entries beat them), and whoever's next
-// drops straight to #12, not #8. Pulls the full board rather than a single count query so
-// it can also report how many people share that rank.
+// drops straight to #12, not #8.
+//
+// Uses server-side COUNT queries (3 tiny reads) instead of downloading every document on
+// the board, so it stays fast and cheap however many entries exist.
 export async function getPlayerStanding(finalScore) {
     try {
-        const snapshot = await withTimeout(scoresCollection.orderBy("score", "desc").get());
+        const { fs, col } = await withTimeout(getFirebase(), 8000);
         const numericScore = Number(finalScore);
-        let scores = [];
-        snapshot.forEach(doc => scores.push(Number(doc.data().score)));
-
-        const rank = scores.filter(s => s > numericScore).length + 1;
-        const tieCount = scores.filter(s => s === numericScore).length;
-        return { rank, tieCount, totalPlayers: scores.length };
+        const [ahead, tied, total] = await withTimeout(Promise.all([
+            fs.getCountFromServer(fs.query(col, fs.where("score", ">", numericScore))),
+            fs.getCountFromServer(fs.query(col, fs.where("score", "==", numericScore))),
+            fs.getCountFromServer(col)
+        ]));
+        return {
+            rank: ahead.data().count + 1,
+            tieCount: tied.data().count,
+            totalPlayers: total.data().count
+        };
     } catch (e) {
         console.error("Failed to compute player standing.", e);
         return null;
@@ -274,7 +287,8 @@ export async function getPlayerStanding(finalScore) {
 // Pull Live Standings
 export async function getGlobalTopFive() {
     try {
-        const snapshot = await withTimeout(scoresCollection.orderBy("score", "desc").limit(5).get());
+        const { fs, col } = await withTimeout(getFirebase(), 8000);
+        const snapshot = await withTimeout(fs.getDocs(fs.query(col, fs.orderBy("score", "desc"), fs.limit(5))));
         let list = [];
         snapshot.forEach(doc => list.push(doc.data()));
         return list;

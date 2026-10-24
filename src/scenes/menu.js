@@ -213,7 +213,9 @@ export default function loadMenuScene() {
             };
 
             const submitName = async () => {
-                const rawName = input.value.trim();
+                // Strip [ ] (Kaboom text-markup characters, also rejected by firestore.rules)
+                // and control characters, so every saved name displays exactly as typed.
+                const rawName = input.value.replace(/[\[\]\u0000-\u001f]/g, "").trim();
                 if (!rawName) {
                     errorLabel.textContent = "A manager name is required for the scoreboard.";
                     return;

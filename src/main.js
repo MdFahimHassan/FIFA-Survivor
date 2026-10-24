@@ -2,8 +2,8 @@
 // FIFA SURVIVOR: LAST TEAM STANDING (MAIN ROUTER ENTRY)
 // =======================================================
 
-import { seedInitialBenchmarks, loadSavedProfile, session } from "./config.js";
-import { loadAllAssets } from "./assets.js";
+import { loadSavedProfile, session } from "./config.js";
+import { loadCriticalAssets } from "./assets.js";
 import { initMobileControls } from "./mobile_controls.js";
 import { initPauseMenu } from "./pause_menu.js";
 
@@ -45,9 +45,12 @@ window.play = (soundId, opts = {}) => {
     return _kaboomPlay(soundId, { ...opts, volume: effectiveVolume });
 };
 
-// 2. Initialize Cloud Benchmarks & Data Assets
-seedInitialBenchmarks();
-loadAllAssets();
+// 2. Load only the assets the first screens need. The rest (gameplay sounds, flags,
+// achievement art, ...) is requested by the loading scene once the menu is about to show.
+// NOTE: the five benchmark leaderboard docs are no longer re-written on every page load -
+// they already exist in Firestore, and with the tightened rules a client can't overwrite
+// them anyway.
+loadCriticalAssets();
 
 // 3. Register Application Routes
 loadInteractionGateScene();
