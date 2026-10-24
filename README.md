@@ -27,7 +27,11 @@ The core directive was to maximize **audience engagement**. Instead of a static 
 
 ##  Core Features
 
+<<<<<<< HEAD
 * ** Live Global Leaderboard** — Integrated natively with Google Firestore, fetching and updating the Top 5 players in real time to drive continuous crowd engagement. Firestore security rules validate every write (shape, type, score cap, no edits to other fields). Because the game runs in the browser, a determined cheater can still submit a fake value under the cap - see **Anti-cheat** below.
+=======
+* ** Live Global Leaderboard** — Integrated natively with Google Firestore, fetching and updating the Top 5 players in real time to drive continuous crowd engagement. Server-side security rules validate every write, so scores can't be forged or injected from outside the game.
+>>>>>>> 6b5cd169fe5b4a73fe5aefd56732562a46e99ba2
 * ** Dynamic Strategy Room (Shop)** — Players balance risk and reward by spending hard-earned coins on mid-game stat upgrades (Speed, Fire Rate, Magnet Radius) or saving up for Endgame Tactics (Shotgun, Energy Shield, Piercing Ball). One press, one purchase — full control over how a run's economy is spent.
 * ** Scaling Difficulty Engine** — Enemy spawn rates, speeds, and boss-tier defenders escalate dynamically the longer a player survives.
 * ** Match Milestones** — A full achievement system tracks standout moments across a run, from first kills to rare, hard-earned feats.
@@ -71,6 +75,7 @@ This is a static site — no build step, no environment variables required. Verc
 2. Paste `firestore.rules` into **Firebase Console → Firestore Database → Rules → Publish** — this is a separate, manual step; deploying to Vercel does not touch Firebase.
 3. (Optional) Turn on **Web Analytics** for the project in the Vercel dashboard — the tracking script is already wired up in `index.html`.
 
+<<<<<<< HEAD
 ##  Anti-cheat (honest version)
 
 * `firestore.rules` caps scores, locks the document shape, forbids deleting/lowering scores and rejects junk IDs. **Publish it** (Firebase Console → Firestore → Rules) - deploying to Vercel doesn't.
@@ -83,6 +88,8 @@ This is a static site — no build step, no environment variables required. Verc
 * Music is trimmed to seamless loops (originals in `_originals/`, not deployed) - Kaboom fully decodes audio into RAM, so long tracks are expensive on phones.
 * Kaboom is self-hosted in `vendor/`; Firebase is lazy-loaded as a modular ES module.
 
+=======
+>>>>>>> 6b5cd169fe5b4a73fe5aefd56732562a46e99ba2
 ##  License
 
 Released under the [MIT License](LICENSE) — free to use, modify, and build on, with attribution.
