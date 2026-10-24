@@ -41,10 +41,31 @@ export default function loadWinScene() {
 
         const syncStatus = add([text("SYNCHRONIZING CHAMPIONSHIP RECORDS...", { size: 14, font: "bebas" }), pos(center().x, center().y + 20), anchor("center"), color(0, 215, 140)]);
 
+        // Honest status instead of fake data: shown when the board can't be reached, or when
+        // this run's score could not be stored.
+        function showSaveNotice(saveStatus) {
+            if (saveStatus !== "failed" && saveStatus !== "rejected") return;
+            const msg = saveStatus === "rejected"
+                ? "SCORE NOT SAVED: IT FAILED VERIFICATION"
+                : "SCORE NOT SAVED: CHECK YOUR CONNECTION";
+            add([text(msg, { size: 14, font: "bebas" }), pos(center().x, height() * 0.85), anchor("center"), color(255, 130, 130), outline(1, rgb(10, 10, 10))]);
+        }
+
         async function processCloudStandings() {
-            await saveScoreToLeaderboard(finalScore, elapsedSeconds);
+            const saveStatus = await saveScoreToLeaderboard(finalScore, elapsedSeconds);
             const globalTopFive = await getGlobalTopFive();
             destroy(syncStatus);
+
+            if (!globalTopFive) {
+                add([text("LEADERBOARD OFFLINE", { size: 20, font: "bebas" }), pos(center().x, center().y + 20), anchor("center"), color(255, 130, 130), outline(1, rgb(10, 10, 10))]);
+                add([text("Could not reach the global standings.", { size: 16, font: "teko" }), pos(center().x, center().y + 48), anchor("center"), color(200, 205, 210)]);
+                showSaveNotice(saveStatus);
+                return;
+            }
+            showSaveNotice(saveStatus);
+            if (globalTopFive.length === 0) {
+                add([text("NO SCORES YET. BE THE FIRST!", { size: 18, font: "bebas" }), pos(center().x, center().y + 40), anchor("center"), color(255, 255, 255)]);
+            }
 
             add([text("--- GLOBAL TOP 5 STANDINGS ---", { size: 16, font: "bebas" }), pos(center().x, center().y + 5), anchor("center"), color(255, 215, 0)]);
 

@@ -20,6 +20,11 @@ sprites/players.jpg
 sprites/SS.png
 sprites/menu.jpg
 
+# Dev-only: unit tests and the atlas build script. (api/ MUST stay deployed: it is the
+# serverless leaderboard backend.)
+tests/
+tools/
+
 node_modules/
 package-lock.json
 firestore.rules

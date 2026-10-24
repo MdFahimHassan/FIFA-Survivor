@@ -1,4 +1,4 @@
-import { session } from "../config.js";
+import { session, startRun } from "../config.js";
 import { countriesList } from "../assets.js";
 import { BALANCE } from "../balance.js";
 import {
@@ -39,6 +39,7 @@ export default function loadMainGameScene() {
         session.run.isUpgrading = false;
         session.run.bicycleCooldown = 0;
         session.run.matchStartTime = time();
+        startRun(); // ask the server for a signed run token (used when the score is submitted)
 
         let isDashing = false;
         let shopOpenedOnce = false;

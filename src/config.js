@@ -41,7 +41,10 @@ export const session = {
 
         // Mobile touch input (mutated live by mobile_controls.js, read by the main
         // scene's movement update). x/y each clamped to [-1, 1]; (0,0) means "no input".
-        touchVec: { x: 0, y: 0 }
+        touchVec: { x: 0, y: 0 },
+
+        // Promise for the signed run token requested at match start (see startRun() below).
+        tokenPromise: null
     },
 
     upgrades: {
@@ -127,8 +130,9 @@ export function saveAudioSettings() {
 
 // Firebase Configuration Setup
 // (These values are public by design - they identify the project, they are not secrets.
-// What protects the data is firestore.rules + restricting the API key to your domain in
-// Google Cloud Console -> APIs & Services -> Credentials.)
+// The browser only READS the leaderboard with them; every write goes through api/submit.js,
+// and firestore.rules denies client writes. Still worth restricting the API key to your
+// domain in Google Cloud Console -> APIs & Services -> Credentials.)
 const firebaseConfig = {
     apiKey: "AIzaSyCyd3jbU1m_Zshl63C1NBHN_AJgLxUCQxs",
     authDomain: "fifa-survivor.firebaseapp.com",
@@ -185,28 +189,69 @@ function withTimeout(promise, ms = 6000) {
     ]);
 }
 
-// Unique Tag Generator Engine
-export async function generateUniqueTag(enteredName) {
+// Small POST helper for the game's own API (api/*.js on Vercel). Same-origin, JSON in/out,
+// hard timeout. Throws on network failure, timeout or a non-2xx response (err.status set).
+async function postApi(path, body, ms = 6000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
     try {
-        const { fs, col } = await withTimeout(getFirebase(), 8000);
-        const q = fs.query(col, fs.where("name_lowercase", "==", enteredName.toLowerCase()));
-        const snapshot = await withTimeout(fs.getDocs(q));
-        let nextNum = snapshot.size + 1;
-        return "#" + (nextNum < 10 ? "0" + nextNum : nextNum);
-    } catch (e) {
-        console.error("Database connection delayed, setting fallback tag.", e);
-        return "#01";
+        const res = await fetch(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal: controller.signal
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            const err = new Error(data.error || `HTTP ${res.status}`);
+            err.status = res.status;
+            throw err;
+        }
+        return data;
+    } finally {
+        clearTimeout(timer);
     }
+}
+
+// Unique Tag Generator Engine
+//
+// The server hands out the next free "#NN" for this name AND reserves it (api/claim.js), so
+// two people typing the same name at the same moment can't both get "#01" any more. The
+// previous version counted existing leaderboard entries, which only changes after somebody
+// FINISHES a match, so a crowd of players with the same name all got the same tag.
+//
+// If the server can't be reached we fall back to a random tag (10-999) so the game stays
+// playable; a random pick collides with another same-name player roughly 1 time in 1000.
+// Asking again for the same name within a session reuses the tag instead of burning a new one.
+const claimedTags = new Map(); // lowercased name -> tag
+export async function generateUniqueTag(enteredName) {
+    const key = enteredName.toLowerCase();
+    if (claimedTags.has(key)) return claimedTags.get(key);
+    let tag;
+    try {
+        ({ tag } = await postApi("/api/claim", { name: enteredName }, 8000));
+        if (!/^#[0-9]{2,3}$/.test(tag)) throw new Error("Unexpected tag format.");
+    } catch (e) {
+        console.error("Tag reservation failed, using a random fallback tag.", e);
+        tag = "#" + (10 + Math.floor(Math.random() * 990));
+    }
+    claimedTags.set(key, tag);
+    return tag;
 }
 
 // Upload Score Engine
 //
-// NOTE ON CHEATING: this is a client-side plausibility check ONLY. Anyone can still open
-// devtools and call this function directly with whatever numbers they want. The server-side
-// backstop is firestore.rules (publish it!), which caps the score and locks the document
-// shape; a determined cheater can still submit a fake value under the cap, because a
-// browser game can't prove how it was played. Fully fixing that needs a server (e.g. a
-// Vercel function issuing a signed run token) - see README "Anti-cheat".
+// SECURITY MODEL: the browser can no longer write to Firestore (firestore.rules denies every
+// client write). Instead:
+//   1. startRun()  - when a match begins, asks /api/start for a signed run token. The SERVER
+//      stamps it with its own clock.
+//   2. saveScoreToLeaderboard() - when the match ends, sends the token + score to /api/submit.
+//      The server checks the signature, that the token belongs to this player, that the score
+//      is plausible for the time that REALLY passed, and that the token was not used before,
+//      then writes with the Admin SDK.
+// A cheater can no longer post an arbitrary number; the best they can do is play for real
+// time at the maximum plausible rate (see MAX_SCORE_PER_SECOND in api/_lib.js).
+// Keep the plausibility numbers below in sync with api/_lib.js.
 const MAX_PLAUSIBLE_SCORE_PER_SECOND = 12;
 const PLAUSIBILITY_BUFFER = 60; // flat allowance for bursts (magnet pulls, boss loot drops, etc.)
 
@@ -218,40 +263,46 @@ export function isPlausibleScore(score, elapsedSeconds) {
     return numericScore <= cap;
 }
 
-// One leaderboard document per player identity (name + assigned tag), instead of a new
-// row every single match. This is what makes "Try Again" from the win/lose screen safe to
-// spam without flooding the board with duplicate entries for the same person - each retry
-// just re-writes the SAME doc, and only when the new score actually beats their old one.
-// NOTE: firestore.rules validates this exact format on create - keep them in sync.
-function buildPlayerDocId(name, tag) {
-    const slug = (name || "player").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24) || "player";
-    const tagNum = (tag || "#00").replace("#", "");
-    return `player_${slug}_${tagNum}`;
+// Call once at the start of every match. The request runs in the background; the result is
+// awaited when the score is submitted.
+export function startRun() {
+    const { name, tag } = session.player;
+    session.run.tokenPromise = postApi("/api/start", { name, tag })
+        .then((data) => (typeof data.token === "string" ? data.token : null))
+        .catch((e) => {
+            console.error("Could not start a verified run; this score will not be uploaded.", e);
+            return null;
+        });
 }
 
+// One leaderboard document per player identity (name + assigned tag), instead of a new
+// row every single match. Retries re-write the SAME doc, and only when the new score beats
+// the old one (the server enforces that).
+// NOTE: api/_lib.js buildDocId() and firestore.rules must keep this exact format.
+// Resolves to one of:
+//   "saved"     a new personal best was written
+//   "unchanged" the player already has an equal or better score
+//   "rejected"  the server judged the score implausible
+//   "failed"    the score could not be uploaded (offline, API down, no token)
 export async function saveScoreToLeaderboard(finalScore, elapsedSeconds = 0) {
-    // elapsedSeconds is now REQUIRED to be positive - previously passing 0 skipped the
-    // check entirely.
-    if (!(elapsedSeconds > 0) || !isPlausibleScore(finalScore, elapsedSeconds)) {
+    const score = Math.floor(Number(finalScore));
+    if (!(elapsedSeconds > 0) || !isPlausibleScore(score, elapsedSeconds)) {
         console.warn("Score rejected locally as implausible for match duration; not uploaded.", { finalScore, elapsedSeconds });
-        return;
+        return "rejected";
     }
     try {
-        const { fs, col } = await withTimeout(getFirebase(), 8000);
-        const docRef = fs.doc(col, buildPlayerDocId(session.player.name, session.player.tag));
-        const existing = await withTimeout(fs.getDoc(docRef));
-        if (existing.exists() && Number(existing.data().score) >= Number(finalScore)) {
-            return; // this player's existing score already beats (or ties) the new one - leave it
-        }
-        await withTimeout(fs.setDoc(docRef, {
+        const token = await withTimeout(session.run.tokenPromise || Promise.resolve(null), 6000);
+        if (!token) return "failed";
+        const data = await postApi("/api/submit", {
+            token,
             name: session.player.name,
             tag: session.player.tag,
-            name_lowercase: session.player.name.toLowerCase(),
-            score: Math.floor(Number(finalScore)),
-            timestamp: fs.serverTimestamp()
-        }));
+            score
+        }, 10000);
+        return data.status === "saved" ? "saved" : "unchanged";
     } catch (e) {
         console.error("Failed to upload match record.", e);
+        return (e.status === 422 || e.status === 409) ? "rejected" : "failed";
     }
 }
 
@@ -285,20 +336,18 @@ export async function getPlayerStanding(finalScore) {
 }
 
 // Pull Live Standings
+// Returns the Top 5 as an array (possibly empty if nobody has played yet), or null when the
+// leaderboard can't be reached. It no longer invents sample scores when offline: callers
+// show an honest "leaderboard offline" message instead of fake players.
 export async function getGlobalTopFive() {
     try {
         const { fs, col } = await withTimeout(getFirebase(), 8000);
         const snapshot = await withTimeout(fs.getDocs(fs.query(col, fs.orderBy("score", "desc"), fs.limit(5))));
-        let list = [];
+        const list = [];
         snapshot.forEach(doc => list.push(doc.data()));
         return list;
     } catch (e) {
-        return [
-            { name: "Fahim (Dev)", tag: "#14", score: 1233 },
-            { name: "Raphy", tag: "#05", score: 724 },
-            { name: "Abir", tag: "#03", score: 425 },
-            { name: "Ren", tag: "#07", score: 250 },
-            { name: "Sloth", tag: "#12", score: 78 }
-        ];
+        console.error("Failed to load the global Top 5.", e);
+        return null;
     }
 }

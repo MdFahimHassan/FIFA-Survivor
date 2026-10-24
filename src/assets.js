@@ -1,4 +1,4 @@
-import { FLAGS_ATLAS, MISC_ATLAS } from "./atlas_data.js";
+import { FLAGS_ATLAS, MISC_ATLAS, FLAGS_ATLAS_FILE, MISC_ATLAS_FILE } from "./atlas_data.js";
 // --- ASSET COMPILATION ENGINE ---
 
 export const countriesList = [
@@ -44,14 +44,14 @@ export function loadCriticalAssets() {
 
 
 export const deferredBatches = [
-    // 1. Gameplay graphics. The small sprites live in ONE atlas image (sprites/atlas_misc.png)
+    // 1. Gameplay graphics. The small sprites live in ONE atlas image (sprites/atlas_misc.<hash>.png)
     // registered under their usual names, so sprite("coin") etc. work unchanged. Every
     // separate loadSprite() makes Kaboom re-upload its whole 2048x2048 texture atlas to the
     // GPU, so ~55 tiny files meant ~55 big uploads (the loading-bar stutter). Rebuild the
     // atlases with tools/build_atlases.py after changing any of these images.
     // (grass_grain.png was loaded but never used anywhere, so it is no longer loaded.)
     () => {
-        loadSpriteAtlas("sprites/atlas_misc.png", MISC_ATLAS);
+        loadSpriteAtlas(MISC_ATLAS_FILE, MISC_ATLAS);
         // Animated 3D Coin Sheet (achievement toasts)
         loadSprite("coin_3d", "sprites/coin_3d.png", {
             sliceX: 9,
@@ -81,7 +81,7 @@ export const deferredBatches = [
         loadSound("egg_salah", "audios/salah_hype.mp3");
     },
     // 4. National flags (team select grid): one atlas, each flag still addressable by country name
-    () => loadSpriteAtlas("sprites/atlas_flags.png", FLAGS_ATLAS)
+    () => loadSpriteAtlas(FLAGS_ATLAS_FILE, FLAGS_ATLAS)
 ];
 
 // Convenience: start every batch immediately (not used by the loading scene any more).
